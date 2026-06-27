@@ -1,7 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { formatLabel, formatRuntimeError, lineSpreadOffset } from "./runtime";
+import {
+  appendParsedCommandLogEntry,
+  formatApprovalState,
+  formatCommandError,
+  formatCommandArgument,
+  formatLabel,
+  formatRuntimeError,
+  lineSpreadOffset,
+  shouldSubmitCommandInput,
+  type ParsedCommand,
+} from "./runtime";
 import "./App.css";
 
 type RuntimeStatus = {
@@ -45,6 +55,9 @@ function App() {
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null);
   const [runtimeEvent, setRuntimeEvent] = useState<RuntimeEvent | null>(null);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [commandValue, setCommandValue] = useState("");
+  const [parsedCommands, setParsedCommands] = useState<ParsedCommand[]>([]);
+  const [commandError, setCommandError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -158,6 +171,30 @@ function App() {
     };
   }, [runtimeStatus, runtimeEvent, runtimeError]);
 
+  async function submitCommand(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!shouldSubmitCommandInput(commandValue)) {
+      return;
+    }
+
+    const rawCommand = commandValue;
+    setCommandValue("");
+
+    try {
+      const parsedCommand = await invoke<ParsedCommand>("parse_command", {
+        input: rawCommand,
+      });
+
+      setParsedCommands((entries) =>
+        appendParsedCommandLogEntry(entries, parsedCommand),
+      );
+      setCommandError(null);
+    } catch (error) {
+      setCommandError(formatCommandError(error));
+    }
+  }
+
   return (
     <main
       className="synth-shell"
@@ -246,15 +283,68 @@ function App() {
       </div>
 
       <div className="doc-dock">
-        <div className="doc-input" aria-label="Command dock placeholder">
-          <span className="doc-input__prefix">&gt;</span>
-          <input
-            aria-label="Ask this document"
-            placeholder="Ask this document…"
-            disabled
-            readOnly
-          />
-          <span className="doc-input__caret" aria-hidden="true" />
+        <div className="doc-dock__inner">
+          {commandError ? (
+            <div className="doc-command-error" role="status">
+              <strong>Command unavailable</strong>
+              <span>{commandError}</span>
+            </div>
+          ) : null}
+
+          {parsedCommands.length > 0 ? (
+            <ol
+              className="doc-command-log"
+              aria-label="Parsed command log"
+              aria-live="polite"
+            >
+              {parsedCommands.map((command, index) => (
+                <li
+                  className="doc-command-log__entry"
+                  data-latest={index === 0 ? "true" : undefined}
+                  key={`${command.raw}-${index}`}
+                >
+                  <div className="doc-command-log__meta">
+                    <span>{command.kind}</span>
+                    {index === 0 ? <em>latest</em> : null}
+                  </div>
+                  <dl className="doc-command-log__details">
+                    <div>
+                      <dt>argument</dt>
+                      <dd>{formatCommandArgument(command.argument)}</dd>
+                    </div>
+                    <div>
+                      <dt>requiresApproval</dt>
+                      <dd>
+                        {String(command.requiresApproval)} ·{" "}
+                        {formatApprovalState(command)}
+                      </dd>
+                    </div>
+                  </dl>
+                  <p>{command.summary}</p>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+
+          <form
+            className="doc-input"
+            aria-label="Command dock"
+            onSubmit={submitCommand}
+          >
+            <span className="doc-input__prefix">&gt;</span>
+            <input
+              aria-label="Command input"
+              placeholder="Type /, ?, @, #, !, >, or natural language…"
+              value={commandValue}
+              onChange={(event) => {
+                setCommandValue(event.target.value);
+                setCommandError(null);
+              }}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <span className="doc-input__caret" aria-hidden="true" />
+          </form>
         </div>
       </div>
 
