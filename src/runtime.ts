@@ -26,6 +26,38 @@ export function formatCommandError(error: unknown) {
   return "Command parser is unavailable.";
 }
 
+export function formatSpecsIndexError(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return "Specs index is unavailable.";
+}
+
+export type SpecsIndex = {
+  artifactType: "specs-index";
+  generatedFrom: "static-rust-catalog";
+  specs: SpecIndexEntry[];
+  summary: string;
+};
+
+export type SpecIndexEntry = {
+  specId: string;
+  title: string;
+  status: string;
+  path: string;
+  implementationBranch: string;
+  route: string;
+};
+
+export function formatSpecsIndexSource(index: SpecsIndex) {
+  return `${index.artifactType} · ${index.generatedFrom}`;
+}
+
 export type ParsedCommandKind =
   | "navigate"
   | "ask"
@@ -49,6 +81,7 @@ export type RouteDisposition = "handled" | "unsupported" | "blocked" | "empty";
 
 export type RouteTarget =
   | "summary"
+  | "specs"
   | "runtime-status"
   | "event-stream"
   | "phase"

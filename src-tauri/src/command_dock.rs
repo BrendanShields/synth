@@ -46,6 +46,7 @@ pub enum RouteDisposition {
 #[serde(rename_all = "kebab-case")]
 pub enum RouteTarget {
     Summary,
+    Specs,
     RuntimeStatus,
     EventStream,
     Phase,
@@ -171,6 +172,12 @@ fn route_navigation(parsed: ParsedCommand) -> CommandRoute {
             RouteDisposition::Handled,
             RouteTarget::Summary,
             "Handled slash navigation route to the summary section.",
+        ),
+        "specs" => route(
+            parsed,
+            RouteDisposition::Handled,
+            RouteTarget::Specs,
+            "Handled slash navigation route to the specs index.",
         ),
         "runtime-status" | "runtime" => route(
             parsed,
@@ -354,6 +361,12 @@ mod tests {
             "summary",
         );
         assert_route(
+            "/specs",
+            RouteDisposition::Handled,
+            RouteTarget::Specs,
+            "specs",
+        );
+        assert_route(
             "/runtime-status",
             RouteDisposition::Handled,
             RouteTarget::RuntimeStatus,
@@ -397,10 +410,10 @@ mod tests {
 
     #[test]
     fn returns_unsupported_for_unknown_slash_navigation() {
-        let route = route_raw_command("/specs");
+        let route = route_raw_command("/sessions");
 
         assert_eq!(route.parsed.kind, CommandKind::Navigate);
-        assert_eq!(route.parsed.argument, "specs");
+        assert_eq!(route.parsed.argument, "sessions");
         assert_eq!(route.disposition, RouteDisposition::Unsupported);
         assert_eq!(route.target, RouteTarget::None);
         assert!(route.message.contains("not available yet"));
