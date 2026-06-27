@@ -13,12 +13,19 @@
     "windows": [
       {
         "title": "synth",
-        "width": 800,
-        "height": 600
+        "width": 1180,
+        "height": 820,
+        "minWidth": 480,
+        "minHeight": 520
       }
     ],
     "security": {
       "csp": null
+    }
+  },
+  "plugins": {
+    "cli": {
+      "args": []
     }
   },
   "bundle": {

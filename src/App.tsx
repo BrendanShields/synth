@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import "./App.css";
@@ -126,88 +126,179 @@ function App() {
     };
   }, []);
 
-  const shellStatus = useMemo(() => {
-    if (!runtimeStatus) {
-      return "Synth · Runtime bridge connecting";
+  useEffect(() => {
+    const scroller = document.querySelector<HTMLElement>(".doc-scroll");
+    if (!scroller) {
+      return;
     }
 
-    return `${runtimeStatus.productName} · ${formatLabel(
-      runtimeStatus.autonomyMode,
-    )} · Planning ${formatLabel(
-      runtimeStatus.planningGate,
-    )} · Runtime ${formatLabel(runtimeStatus.eventStreamState)}`;
-  }, [runtimeStatus]);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+
+    const SELECTOR =
+      ".doc-head h1, .doc-lede, .doc-prose, .doc-section h2, .doc-status__row, .doc-quote, .doc-error";
+    const UP_STRENGTH = 0.16;
+    const DOWN_STRENGTH = 0.08;
+    const UP_PIVOT = 0.1;
+    const DOWN_PIVOT = 0.78;
+    const BOTTOM_INSET = 256;
+
+    let frame = 0;
+
+    function update() {
+      frame = 0;
+      const vh = window.innerHeight;
+      const upEdge = vh * UP_PIVOT;
+      const downEdge = vh * DOWN_PIVOT;
+      const downSpan = Math.max(1, vh - BOTTOM_INSET - downEdge);
+      scroller
+        ?.querySelectorAll<HTMLElement>(SELECTOR)
+        .forEach((line) => {
+          const rect = line.getBoundingClientRect();
+          const center = rect.top + rect.height / 2;
+          let offset = 0;
+          if (center > downEdge) {
+            const t = Math.min(1.6, (center - downEdge) / downSpan);
+            offset = t * t * downSpan * DOWN_STRENGTH;
+          } else if (center < upEdge) {
+            const t = Math.min(1.4, (upEdge - center) / upEdge);
+            offset = -t * t * upEdge * UP_STRENGTH;
+          }
+          line.style.transform = `translateY(${offset.toFixed(1)}px)`;
+        });
+    }
+
+    function onScroll() {
+      if (!frame) {
+        frame = requestAnimationFrame(update);
+      }
+    }
+
+    update();
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+
+    return () => {
+      scroller.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (frame) {
+        cancelAnimationFrame(frame);
+      }
+    };
+  }, [runtimeStatus, runtimeEvent, runtimeError]);
 
   return (
-    <main className="synth-shell" aria-label="Synth runtime shell">
-      <section className="status-line" aria-live="polite">
-        <span>{shellStatus}</span>
-        <span className={`phase-pill phase-pill--${phase}`}>
-          {formatLabel(phase)}
-        </span>
-      </section>
+    <main
+      className="synth-shell"
+      data-phase={phase}
+      aria-label="Synth runtime shell"
+    >
+      <div className="doc-scroll">
+      <aside className="doc-nav" aria-label="Contents">
+        <p className="doc-nav__title">Contents</p>
+        <nav>
+          <a className="doc-nav__link is-active" href="#summary">
+            Summary
+          </a>
+          <a className="doc-nav__link" href="#runtime-status">
+            Runtime status
+          </a>
+          <a className="doc-nav__link" href="#event-stream">
+            Event stream
+          </a>
+          <a className="doc-nav__link" href="#phase">
+            Phase
+          </a>
+        </nav>
+      </aside>
 
-      <section className="artifact-card" aria-labelledby="runtime-bridge-title">
-        <div className="artifact-kicker">FS-001 · Walking skeleton</div>
-        <div className="artifact-heading">
-          <div>
-            <h1 id="runtime-bridge-title">Runtime event bridge</h1>
-            <p>
-              The React renderer is now a quiet visual surface for status owned
-              by the Rust/Tauri core.
-            </p>
-          </div>
-          <div className="version-mark">
-            {runtimeStatus?.appVersion ?? "0.1.0"}
-          </div>
-        </div>
+      <article className="doc-body">
+        <header className="doc-head" id="summary">
+          <h1>Synth</h1>
+          <p className="doc-lede">
+            The runtime event bridge. The Rust/Tauri core owns truth; the React
+            renderer is a quiet visual surface for it.
+          </p>
+        </header>
+
+        <p className="doc-prose">
+          {runtimeStatus?.summary ??
+            "Planning baseline merged. Ready for Phase 1 walking skeleton."}
+        </p>
 
         {runtimeError ? (
-          <div className="runtime-error" role="status">
+          <div className="doc-error" role="status">
             <strong>Runtime unavailable</strong>
             <span>{runtimeError}</span>
           </div>
         ) : null}
 
-        {runtimeStatus ? (
-          <dl className="status-grid">
-            {statusRows.map((row) => (
-              <div className="status-item" key={row.value}>
-                <dt>{row.label}</dt>
-                <dd>{formatLabel(runtimeStatus[row.value])}</dd>
-              </div>
-            ))}
-          </dl>
-        ) : (
-          <div className="runtime-loading" role="status">
-            Waiting for the trusted runtime status snapshot…
-          </div>
-        )}
+        <section className="doc-section" id="runtime-status">
+          <h2>Runtime status</h2>
+          {runtimeStatus ? (
+            <dl className="doc-status">
+              {statusRows.map((row) => (
+                <div className="doc-status__row" key={row.value}>
+                  <dt>{row.label}</dt>
+                  <dd>{formatLabel(runtimeStatus[row.value])}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="doc-prose doc-prose--muted" role="status">
+              Waiting for the trusted runtime status snapshot…
+            </p>
+          )}
+        </section>
 
-        <div className="event-panel">
-          <div>
-            <span className="eyebrow">Last event</span>
-            <strong>{runtimeEvent?.eventType ?? "No runtime event yet"}</strong>
-          </div>
-          <code>{runtimeEvent?.eventId ?? RUNTIME_STATUS_EVENT}</code>
+        <section className="doc-section" id="event-stream">
+          <h2>Event stream</h2>
+          <blockquote className="doc-quote">
+            {runtimeEvent?.eventType ?? "No runtime event yet"}
+            <cite>{runtimeEvent?.eventId ?? RUNTIME_STATUS_EVENT}</cite>
+          </blockquote>
+        </section>
+
+        <section className="doc-section" id="phase">
+          <h2>Phase</h2>
+          <p className="doc-prose">
+            {runtimeStatus
+              ? `${runtimeStatus.productName} runtime is ${formatLabel(
+                  runtimeStatus.eventStreamState,
+                )}. Autonomy ${formatLabel(
+                  runtimeStatus.autonomyMode,
+                )}, planning ${formatLabel(runtimeStatus.planningGate)}.`
+              : "Synth · runtime bridge connecting."}
+          </p>
+        </section>
+      </article>
+      </div>
+
+      <div className="doc-dock">
+        <div className="doc-input" aria-label="Command dock placeholder">
+          <span className="doc-input__prefix">&gt;</span>
+          <input
+            aria-label="Ask this document"
+            placeholder="Ask this document…"
+            disabled
+            readOnly
+          />
+          <span className="doc-input__caret" aria-hidden="true" />
         </div>
+      </div>
 
-        <p className="summary-copy">
-          {runtimeStatus?.summary ??
-            "Planning baseline merged. Ready for Phase 1 walking skeleton."}
-        </p>
-      </section>
-
-      <section className="command-dock" aria-label="Command dock placeholder">
-        <span className="dock-prefix">/</span>
-        <input
-          aria-label="Command dock placeholder"
-          disabled
-          value="Command dock placeholder — command handling arrives in a later spec"
-          readOnly
-        />
-        <span className="dock-hint">visual only</span>
-      </section>
+      <footer className="doc-foot">
+        <span>
+          <kbd>⌘F</kbd> find
+        </span>
+        <span>
+          <kbd>e</kbd> edit
+        </span>
+        <span>
+          <kbd>esc</kbd> back
+        </span>
+      </footer>
     </main>
   );
 }
