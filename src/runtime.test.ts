@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SPREAD,
+  appendParsedCommandLogEntry,
+  formatApprovalState,
+  formatCommandError,
+  formatCommandArgument,
   formatLabel,
   formatRuntimeError,
   lineSpreadOffset,
+  shouldSubmitCommandInput,
+  type ParsedCommand,
 } from "./runtime";
 
 describe("formatLabel", () => {
@@ -35,6 +41,66 @@ describe("formatRuntimeError", () => {
     expect(formatRuntimeError(undefined)).toBe(
       "Runtime status bridge is unavailable.",
     );
+  });
+});
+
+describe("formatCommandError", () => {
+  it("uses specific command parser fallback copy for unknown errors", () => {
+    expect(formatCommandError(undefined)).toBe("Command parser is unavailable.");
+  });
+
+  it("passes through known errors", () => {
+    expect(formatCommandError(new Error("command not found"))).toBe(
+      "command not found",
+    );
+    expect(formatCommandError("denied")).toBe("denied");
+  });
+});
+
+describe("command dock helpers", () => {
+  const navigateCommand: ParsedCommand = {
+    raw: "/specs",
+    kind: "navigate",
+    verb: "/",
+    argument: "specs",
+    requiresApproval: false,
+    summary:
+      "Navigate intent recognized; navigation routing arrives in a later spec.",
+  };
+
+  const shellCommand: ParsedCommand = {
+    raw: "! cargo test",
+    kind: "shell",
+    verb: "!",
+    argument: "cargo test",
+    requiresApproval: true,
+    summary:
+      "Shell intent recognized; command execution requires approval and is not yet available.",
+  };
+
+  it("prepends parsed commands and caps the transient log", () => {
+    const existing = [navigateCommand, navigateCommand, navigateCommand];
+
+    expect(appendParsedCommandLogEntry(existing, shellCommand, 2)).toEqual([
+      shellCommand,
+      navigateCommand,
+    ]);
+  });
+
+  it("formats missing arguments visibly", () => {
+    expect(formatCommandArgument("specs")).toBe("specs");
+    expect(formatCommandArgument("")).toBe("∅");
+  });
+
+  it("formats approval state from the parsed command payload", () => {
+    expect(formatApprovalState(shellCommand)).toBe("approval required");
+    expect(formatApprovalState(navigateCommand)).toBe("no approval");
+  });
+
+  it("identifies empty command submissions as no-ops", () => {
+    expect(shouldSubmitCommandInput("")).toBe(false);
+    expect(shouldSubmitCommandInput("  \n\t")).toBe(false);
+    expect(shouldSubmitCommandInput(" /specs ")).toBe(true);
   });
 });
 

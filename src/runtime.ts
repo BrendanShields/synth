@@ -14,6 +14,59 @@ export function formatRuntimeError(error: unknown) {
   return "Runtime status bridge is unavailable.";
 }
 
+export function formatCommandError(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return "Command parser is unavailable.";
+}
+
+export type ParsedCommandKind =
+  | "navigate"
+  | "ask"
+  | "reference"
+  | "tag"
+  | "shell"
+  | "steer"
+  | "natural"
+  | "empty";
+
+export type ParsedCommand = {
+  raw: string;
+  kind: ParsedCommandKind;
+  verb: string;
+  argument: string;
+  requiresApproval: boolean;
+  summary: string;
+};
+
+export const MAX_COMMAND_LOG_ENTRIES = 20;
+
+export function appendParsedCommandLogEntry(
+  entries: ParsedCommand[],
+  entry: ParsedCommand,
+  maxEntries = MAX_COMMAND_LOG_ENTRIES,
+) {
+  return [entry, ...entries].slice(0, maxEntries);
+}
+
+export function shouldSubmitCommandInput(input: string) {
+  return input.trim().length > 0;
+}
+
+export function formatCommandArgument(argument: string) {
+  return argument.length > 0 ? argument : "∅";
+}
+
+export function formatApprovalState(command: ParsedCommand) {
+  return command.requiresApproval ? "approval required" : "no approval";
+}
+
 export type SpreadConfig = {
   upStrength: number;
   downStrength: number;
