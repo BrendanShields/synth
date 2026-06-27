@@ -484,6 +484,28 @@ mod tests {
         );
     }
 
+    #[test]
+    fn serializes_specs_route_target_for_the_react_ipc_contract() {
+        let serialized = serde_json::to_value(route_raw_command("/specs")).unwrap();
+
+        assert_eq!(
+            serialized,
+            json!({
+                "parsed": {
+                    "raw": "/specs",
+                    "kind": "navigate",
+                    "verb": "/",
+                    "argument": "specs",
+                    "requiresApproval": false,
+                    "summary": "Navigate intent recognized; navigation routing arrives in a later spec."
+                },
+                "disposition": "handled",
+                "target": "specs",
+                "message": "Handled slash navigation route to the specs index."
+            })
+        );
+    }
+
     fn assert_command(
         input: &str,
         expected_kind: CommandKind,
