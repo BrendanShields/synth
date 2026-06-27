@@ -8,12 +8,15 @@ import {
   formatCommandArgument,
   formatLabel,
   formatRuntimeError,
+  formatSpecsIndexError,
+  formatSpecsIndexSource,
   isHandledRoute,
   lineSpreadOffset,
   routeTargetElementId,
   shouldSubmitCommandInput,
   type CommandRoute,
   type ParsedCommand,
+  type SpecsIndex,
 } from "./runtime";
 
 describe("formatLabel", () => {
@@ -58,6 +61,19 @@ describe("formatCommandError", () => {
       "command not found",
     );
     expect(formatCommandError("denied")).toBe("denied");
+  });
+});
+
+describe("formatSpecsIndexError", () => {
+  it("uses specific specs-index fallback copy for unknown errors", () => {
+    expect(formatSpecsIndexError(undefined)).toBe("Specs index is unavailable.");
+  });
+
+  it("passes through known errors", () => {
+    expect(formatSpecsIndexError(new Error("missing command"))).toBe(
+      "missing command",
+    );
+    expect(formatSpecsIndexError("denied")).toBe("denied");
   });
 });
 
@@ -133,6 +149,7 @@ describe("command dock helpers", () => {
 
   it("maps route targets to existing element ids or no target", () => {
     expect(routeTargetElementId("summary")).toBe("summary");
+    expect(routeTargetElementId("specs")).toBe("specs");
     expect(routeTargetElementId("runtime-status")).toBe("runtime-status");
     expect(routeTargetElementId("event-stream")).toBe("event-stream");
     expect(routeTargetElementId("phase")).toBe("phase");
@@ -149,6 +166,21 @@ describe("command dock helpers", () => {
         target: "none",
       }),
     ).toBe(false);
+  });
+});
+
+describe("specs index helpers", () => {
+  it("formats the static specs-index source", () => {
+    const index: SpecsIndex = {
+      artifactType: "specs-index",
+      generatedFrom: "static-rust-catalog",
+      specs: [],
+      summary: "Static specs index.",
+    };
+
+    expect(formatSpecsIndexSource(index)).toBe(
+      "specs-index · static-rust-catalog",
+    );
   });
 });
 

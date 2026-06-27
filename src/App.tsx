@@ -8,11 +8,14 @@ import {
   formatCommandArgument,
   formatLabel,
   formatRuntimeError,
+  formatSpecsIndexError,
+  formatSpecsIndexSource,
   lineSpreadOffset,
   routeTargetElementId,
   isHandledRoute,
   shouldSubmitCommandInput,
   type CommandRoute,
+  type SpecsIndex,
 } from "./runtime";
 import "./App.css";
 
@@ -60,6 +63,8 @@ function App() {
   const [commandValue, setCommandValue] = useState("");
   const [commandRoutes, setCommandRoutes] = useState<CommandRoute[]>([]);
   const [commandError, setCommandError] = useState<string | null>(null);
+  const [specsIndex, setSpecsIndex] = useState<SpecsIndex | null>(null);
+  const [specsIndexError, setSpecsIndexError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -127,6 +132,35 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+
+    async function loadSpecsIndex() {
+      try {
+        const index = await invoke<SpecsIndex>("list_specs_index");
+
+        if (!active) {
+          return;
+        }
+
+        setSpecsIndex(index);
+        setSpecsIndexError(null);
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        setSpecsIndexError(formatSpecsIndexError(error));
+      }
+    }
+
+    loadSpecsIndex();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const scroller = document.querySelector<HTMLElement>(".doc-scroll");
     if (!scroller) {
       return;
@@ -137,7 +171,7 @@ function App() {
     }
 
     const SELECTOR =
-      ".doc-head h1, .doc-lede, .doc-prose, .doc-section h2, .doc-status__row, .doc-quote, .doc-error";
+      ".doc-head h1, .doc-lede, .doc-prose, .doc-section h2, .doc-status__row, .doc-specs__entry, .doc-quote, .doc-error";
 
     let frame = 0;
 
@@ -171,7 +205,7 @@ function App() {
         cancelAnimationFrame(frame);
       }
     };
-  }, [runtimeStatus, runtimeEvent, runtimeError]);
+  }, [runtimeStatus, runtimeEvent, runtimeError, specsIndex, specsIndexError]);
 
   async function submitCommand(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -228,6 +262,9 @@ function App() {
           <a className="doc-nav__link" href="#runtime-status">
             Runtime status
           </a>
+          <a className="doc-nav__link" href="#specs">
+            Specs
+          </a>
           <a className="doc-nav__link" href="#event-stream">
             Event stream
           </a>
@@ -257,6 +294,52 @@ function App() {
             <span>{runtimeError}</span>
           </div>
         ) : null}
+
+        <section className="doc-section" id="specs">
+          <h2>Specs</h2>
+          {specsIndex ? (
+            <>
+              <p className="doc-prose">{specsIndex.summary}</p>
+              <p className="doc-prose doc-prose--muted doc-prose--mono">
+                {formatSpecsIndexSource(specsIndex)}
+              </p>
+              <ol className="doc-specs" aria-label="Specs index">
+                {specsIndex.specs.map((spec) => (
+                  <li className="doc-specs__entry" key={spec.specId}>
+                    <div className="doc-specs__head">
+                      <span>{spec.specId}</span>
+                      <em>{spec.status}</em>
+                    </div>
+                    <h3>{spec.title}</h3>
+                    <dl className="doc-specs__meta">
+                      <div>
+                        <dt>path</dt>
+                        <dd>{spec.path}</dd>
+                      </div>
+                      <div>
+                        <dt>branch</dt>
+                        <dd>{spec.implementationBranch}</dd>
+                      </div>
+                      <div>
+                        <dt>route</dt>
+                        <dd>{spec.route}</dd>
+                      </div>
+                    </dl>
+                  </li>
+                ))}
+              </ol>
+            </>
+          ) : specsIndexError ? (
+            <div className="doc-error" role="status">
+              <strong>Specs index unavailable</strong>
+              <span>{specsIndexError}</span>
+            </div>
+          ) : (
+            <p className="doc-prose doc-prose--muted" role="status">
+              Loading the static specs index…
+            </p>
+          )}
+        </section>
 
         <section className="doc-section" id="runtime-status">
           <h2>Runtime status</h2>
