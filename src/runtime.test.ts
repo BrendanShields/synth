@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SPREAD,
+  appendCommandRouteLogEntry,
   appendParsedCommandLogEntry,
   formatApprovalState,
   formatCommandError,
   formatCommandArgument,
   formatLabel,
   formatRuntimeError,
+  isHandledRoute,
   lineSpreadOffset,
+  routeTargetElementId,
   shouldSubmitCommandInput,
+  type CommandRoute,
   type ParsedCommand,
 } from "./runtime";
 
@@ -78,12 +82,36 @@ describe("command dock helpers", () => {
       "Shell intent recognized; command execution requires approval and is not yet available.",
   };
 
+  const handledRoute: CommandRoute = {
+    parsed: navigateCommand,
+    disposition: "handled",
+    target: "runtime-status",
+    message: "Handled slash navigation route to the runtime-status section.",
+  };
+
+  const blockedRoute: CommandRoute = {
+    parsed: shellCommand,
+    disposition: "blocked",
+    target: "none",
+    message:
+      "Shell route blocked; command execution requires approval and is not yet available.",
+  };
+
   it("prepends parsed commands and caps the transient log", () => {
     const existing = [navigateCommand, navigateCommand, navigateCommand];
 
     expect(appendParsedCommandLogEntry(existing, shellCommand, 2)).toEqual([
       shellCommand,
       navigateCommand,
+    ]);
+  });
+
+  it("prepends command routes and caps the transient route log", () => {
+    const existing = [handledRoute, handledRoute, handledRoute];
+
+    expect(appendCommandRouteLogEntry(existing, blockedRoute, 2)).toEqual([
+      blockedRoute,
+      handledRoute,
     ]);
   });
 
@@ -101,6 +129,26 @@ describe("command dock helpers", () => {
     expect(shouldSubmitCommandInput("")).toBe(false);
     expect(shouldSubmitCommandInput("  \n\t")).toBe(false);
     expect(shouldSubmitCommandInput(" /specs ")).toBe(true);
+  });
+
+  it("maps route targets to existing element ids or no target", () => {
+    expect(routeTargetElementId("summary")).toBe("summary");
+    expect(routeTargetElementId("runtime-status")).toBe("runtime-status");
+    expect(routeTargetElementId("event-stream")).toBe("event-stream");
+    expect(routeTargetElementId("phase")).toBe("phase");
+    expect(routeTargetElementId("none")).toBeNull();
+  });
+
+  it("identifies only handled non-none routes as navigable", () => {
+    expect(isHandledRoute(handledRoute)).toBe(true);
+    expect(isHandledRoute(blockedRoute)).toBe(false);
+    expect(
+      isHandledRoute({
+        ...handledRoute,
+        disposition: "unsupported",
+        target: "none",
+      }),
+    ).toBe(false);
   });
 });
 

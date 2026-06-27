@@ -12,6 +12,15 @@ pub struct ParsedCommand {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandRoute {
+    pub parsed: ParsedCommand,
+    pub disposition: RouteDisposition,
+    pub target: RouteTarget,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CommandKind {
     Navigate,
@@ -22,6 +31,25 @@ pub enum CommandKind {
     Steer,
     Natural,
     Empty,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RouteDisposition {
+    Handled,
+    Unsupported,
+    Blocked,
+    Empty,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RouteTarget {
+    Summary,
+    RuntimeStatus,
+    EventStream,
+    Phase,
+    None,
 }
 
 impl CommandKind {
@@ -94,6 +122,101 @@ pub fn parse_raw_command(input: &str) -> ParsedCommand {
     }
 }
 
+pub fn route_raw_command(input: &str) -> CommandRoute {
+    let parsed = parse_raw_command(input);
+
+    match parsed.kind {
+        CommandKind::Empty => route(
+            parsed,
+            RouteDisposition::Empty,
+            RouteTarget::None,
+            "Empty input recognized; no route was evaluated.",
+        ),
+        CommandKind::Shell => route(
+            parsed,
+            RouteDisposition::Blocked,
+            RouteTarget::None,
+            "Shell route blocked; command execution requires approval and is not yet available.",
+        ),
+        CommandKind::Navigate => route_navigation(parsed),
+        CommandKind::Ask => unsupported_route(
+            parsed,
+            "Ask routes are not available yet; artifact questions arrive in a later spec.",
+        ),
+        CommandKind::Reference => unsupported_route(
+            parsed,
+            "Reference routes are not available yet; reference resolution arrives in a later spec.",
+        ),
+        CommandKind::Tag => unsupported_route(
+            parsed,
+            "Tag routes are not available yet; tag resolution arrives in a later spec.",
+        ),
+        CommandKind::Steer => unsupported_route(
+            parsed,
+            "Steer routes are not available yet; active-turn steering arrives in a later spec.",
+        ),
+        CommandKind::Natural => unsupported_route(
+            parsed,
+            "Natural-language routes are not available yet; request handling arrives in a later spec.",
+        ),
+    }
+}
+
+fn route_navigation(parsed: ParsedCommand) -> CommandRoute {
+    let normalized_argument = parsed.argument.to_ascii_lowercase();
+
+    match normalized_argument.as_str() {
+        "summary" => route(
+            parsed,
+            RouteDisposition::Handled,
+            RouteTarget::Summary,
+            "Handled slash navigation route to the summary section.",
+        ),
+        "runtime-status" | "runtime" => route(
+            parsed,
+            RouteDisposition::Handled,
+            RouteTarget::RuntimeStatus,
+            "Handled slash navigation route to the runtime-status section.",
+        ),
+        "event-stream" | "events" => route(
+            parsed,
+            RouteDisposition::Handled,
+            RouteTarget::EventStream,
+            "Handled slash navigation route to the event-stream section.",
+        ),
+        "phase" => route(
+            parsed,
+            RouteDisposition::Handled,
+            RouteTarget::Phase,
+            "Handled slash navigation route to the phase section.",
+        ),
+        _ => unsupported_route(parsed, "Slash navigation route is not available yet."),
+    }
+}
+
+fn unsupported_route(parsed: ParsedCommand, message: &str) -> CommandRoute {
+    route(
+        parsed,
+        RouteDisposition::Unsupported,
+        RouteTarget::None,
+        message,
+    )
+}
+
+fn route(
+    parsed: ParsedCommand,
+    disposition: RouteDisposition,
+    target: RouteTarget,
+    message: &str,
+) -> CommandRoute {
+    CommandRoute {
+        parsed,
+        disposition,
+        target,
+        message: message.to_string(),
+    }
+}
+
 fn prefixed_command(
     trimmed_leading: &str,
     kind: CommandKind,
@@ -107,6 +230,11 @@ fn prefixed_command(
 #[tauri::command]
 pub fn parse_command(input: String) -> ParsedCommand {
     parse_raw_command(&input)
+}
+
+#[tauri::command]
+pub fn route_command(input: String) -> CommandRoute {
+    route_raw_command(&input)
 }
 
 #[cfg(test)]
@@ -217,6 +345,132 @@ mod tests {
         );
     }
 
+    #[test]
+    fn routes_supported_slash_navigation_commands_and_aliases() {
+        assert_route(
+            "/summary",
+            RouteDisposition::Handled,
+            RouteTarget::Summary,
+            "summary",
+        );
+        assert_route(
+            "/runtime-status",
+            RouteDisposition::Handled,
+            RouteTarget::RuntimeStatus,
+            "runtime-status",
+        );
+        assert_route(
+            "/runtime",
+            RouteDisposition::Handled,
+            RouteTarget::RuntimeStatus,
+            "runtime",
+        );
+        assert_route(
+            "/event-stream",
+            RouteDisposition::Handled,
+            RouteTarget::EventStream,
+            "event-stream",
+        );
+        assert_route(
+            "/events",
+            RouteDisposition::Handled,
+            RouteTarget::EventStream,
+            "events",
+        );
+        assert_route(
+            "/phase",
+            RouteDisposition::Handled,
+            RouteTarget::Phase,
+            "phase",
+        );
+    }
+
+    #[test]
+    fn routes_navigation_case_insensitively_after_parsing() {
+        assert_route(
+            "  /Runtime  ",
+            RouteDisposition::Handled,
+            RouteTarget::RuntimeStatus,
+            "Runtime",
+        );
+    }
+
+    #[test]
+    fn returns_unsupported_for_unknown_slash_navigation() {
+        let route = route_raw_command("/specs");
+
+        assert_eq!(route.parsed.kind, CommandKind::Navigate);
+        assert_eq!(route.parsed.argument, "specs");
+        assert_eq!(route.disposition, RouteDisposition::Unsupported);
+        assert_eq!(route.target, RouteTarget::None);
+        assert!(route.message.contains("not available yet"));
+    }
+
+    #[test]
+    fn returns_unsupported_for_all_non_navigation_non_shell_kinds() {
+        let cases = [
+            ("? what does this mean", CommandKind::Ask),
+            ("@docs/PRD.md", CommandKind::Reference),
+            ("#FS-003", CommandKind::Tag),
+            ("> stop", CommandKind::Steer),
+            ("add a workspace opener", CommandKind::Natural),
+        ];
+
+        for (input, expected_kind) in cases {
+            let route = route_raw_command(input);
+
+            assert_eq!(route.parsed.kind, expected_kind);
+            assert_eq!(route.disposition, RouteDisposition::Unsupported);
+            assert_eq!(route.target, RouteTarget::None);
+            assert!(
+                route.message.contains("later spec") || route.message.contains("not available yet")
+            );
+        }
+    }
+
+    #[test]
+    fn blocks_shell_routes_without_execution() {
+        let route = route_raw_command("! cargo test");
+
+        assert_eq!(route.parsed.kind, CommandKind::Shell);
+        assert!(route.parsed.requires_approval);
+        assert_eq!(route.disposition, RouteDisposition::Blocked);
+        assert_eq!(route.target, RouteTarget::None);
+        assert!(route.message.contains("requires approval"));
+        assert!(route.message.contains("not yet available"));
+    }
+
+    #[test]
+    fn returns_empty_for_direct_empty_routing() {
+        let route = route_raw_command("  \n\t");
+
+        assert_eq!(route.parsed.kind, CommandKind::Empty);
+        assert_eq!(route.disposition, RouteDisposition::Empty);
+        assert_eq!(route.target, RouteTarget::None);
+    }
+
+    #[test]
+    fn serializes_routes_for_the_react_ipc_contract_in_camel_case() {
+        let serialized = serde_json::to_value(route_raw_command("/runtime")).unwrap();
+
+        assert_eq!(
+            serialized,
+            json!({
+                "parsed": {
+                    "raw": "/runtime",
+                    "kind": "navigate",
+                    "verb": "/",
+                    "argument": "runtime",
+                    "requiresApproval": false,
+                    "summary": "Navigate intent recognized; navigation routing arrives in a later spec."
+                },
+                "disposition": "handled",
+                "target": "runtime-status",
+                "message": "Handled slash navigation route to the runtime-status section."
+            })
+        );
+    }
+
     fn assert_command(
         input: &str,
         expected_kind: CommandKind,
@@ -232,5 +486,19 @@ mod tests {
         assert_eq!(parsed.argument, expected_argument);
         assert_eq!(parsed.requires_approval, expected_requires_approval);
         assert!(parsed.summary.contains("recognized") || parsed.kind == CommandKind::Empty);
+    }
+
+    fn assert_route(
+        input: &str,
+        expected_disposition: RouteDisposition,
+        expected_target: RouteTarget,
+        expected_argument: &str,
+    ) {
+        let route = route_raw_command(input);
+
+        assert_eq!(route.parsed.kind, CommandKind::Navigate);
+        assert_eq!(route.parsed.argument, expected_argument);
+        assert_eq!(route.disposition, expected_disposition);
+        assert_eq!(route.target, expected_target);
     }
 }
