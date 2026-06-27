@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { formatLabel, formatRuntimeError, lineSpreadOffset } from "./runtime";
 import "./App.css";
 
 type RuntimeStatus = {
@@ -38,22 +39,6 @@ const statusRows: Array<{
   { label: "Provider", value: "providerState" },
   { label: "Event stream", value: "eventStreamState" },
 ];
-
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function formatRuntimeError(error: unknown) {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  if (typeof error === "string") {
-    return error;
-  }
-
-  return "Runtime status bridge is unavailable.";
-}
 
 function App() {
   const [phase, setPhase] = useState<RuntimePhase>("loading");
@@ -138,33 +123,18 @@ function App() {
 
     const SELECTOR =
       ".doc-head h1, .doc-lede, .doc-prose, .doc-section h2, .doc-status__row, .doc-quote, .doc-error";
-    const UP_STRENGTH = 0.16;
-    const DOWN_STRENGTH = 0.08;
-    const UP_PIVOT = 0.1;
-    const DOWN_PIVOT = 0.78;
-    const BOTTOM_INSET = 256;
 
     let frame = 0;
 
     function update() {
       frame = 0;
       const vh = window.innerHeight;
-      const upEdge = vh * UP_PIVOT;
-      const downEdge = vh * DOWN_PIVOT;
-      const downSpan = Math.max(1, vh - BOTTOM_INSET - downEdge);
       scroller
         ?.querySelectorAll<HTMLElement>(SELECTOR)
         .forEach((line) => {
           const rect = line.getBoundingClientRect();
           const center = rect.top + rect.height / 2;
-          let offset = 0;
-          if (center > downEdge) {
-            const t = Math.min(1.6, (center - downEdge) / downSpan);
-            offset = t * t * downSpan * DOWN_STRENGTH;
-          } else if (center < upEdge) {
-            const t = Math.min(1.4, (upEdge - center) / upEdge);
-            offset = -t * t * upEdge * UP_STRENGTH;
-          }
+          const offset = lineSpreadOffset(center, vh);
           line.style.transform = `translateY(${offset.toFixed(1)}px)`;
         });
     }
