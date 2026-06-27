@@ -1,0 +1,25 @@
+# Synth repository ownership
+#
+# GitHub uses the last matching pattern when multiple rules match.
+# Keep broad defaults near the top and more specific planning/runtime rules below.
+
+* @BrendanShields
+
+# Project planning baseline and docs-as-code substrate
+/docs/PRD.md @BrendanShields
+/docs/engineering/** @BrendanShields
+/docs/adrs/** @BrendanShields
+/docs/specs/** @BrendanShields
+/docs/releases/** @BrendanShields
+/docs/knowledge/** @BrendanShields
+/docs/templates/** @BrendanShields
+
+# Application surfaces
+/src/** @BrendanShields
+/src-tauri/** @BrendanShields
+
+# Repository governance
+/.github/CODEOWNERS @BrendanShields
+/README.md @BrendanShields
+/package.json @BrendanShields
+/src-tauri/Cargo.toml @BrendanShields

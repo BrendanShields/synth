@@ -64,6 +64,9 @@ Future extension points include MCP servers, skills, subagents, deterministic wo
 
 - [PRD](docs/PRD.md)
 - [ERD / HLSA](docs/engineering/ERD.md)
+- [CODEOWNERS setup](docs/engineering/CODEOWNERS.md)
+- [ADRs](docs/adrs/)
+- [Planning templates](docs/templates/)
 
 ## Development
 
@@ -106,10 +109,19 @@ bun run tauri build
 ## Repository layout
 
 ```text
+.github/
+  CODEOWNERS
 docs/
   PRD.md
+  adrs/
+    ADR-*.md
   engineering/
+    CODEOWNERS.md
     ERD.md
+  templates/
+    CODEOWNERS.template
+    amendment.md
+    feature-spec.md
 src/
   React renderer scaffold
 src-tauri/
