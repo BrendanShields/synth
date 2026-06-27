@@ -1,0 +1,23 @@
+# Repository ownership template
+# Replace placeholder owners with GitHub users or teams before enabling.
+
+* @default-owner
+
+# Project planning baseline and docs-as-code substrate
+/docs/PRD.md @product-owner
+/docs/engineering/** @tech-lead
+/docs/adrs/** @tech-lead
+/docs/specs/** @product-owner @tech-lead
+/docs/releases/** @product-owner @tech-lead
+/docs/knowledge/** @tech-lead
+/docs/templates/** @tech-lead
+
+# Application surfaces
+/src/** @frontend-owner
+/src-tauri/** @runtime-owner
+
+# Repository governance
+/.github/CODEOWNERS @repo-governance-owner
+/README.md @repo-governance-owner
+/package.json @frontend-owner
+/src-tauri/Cargo.toml @runtime-owner
