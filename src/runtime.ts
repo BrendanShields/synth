@@ -45,7 +45,31 @@ export type ParsedCommand = {
   summary: string;
 };
 
+export type RouteDisposition = "handled" | "unsupported" | "blocked" | "empty";
+
+export type RouteTarget =
+  | "summary"
+  | "runtime-status"
+  | "event-stream"
+  | "phase"
+  | "none";
+
+export type CommandRoute = {
+  parsed: ParsedCommand;
+  disposition: RouteDisposition;
+  target: RouteTarget;
+  message: string;
+};
+
 export const MAX_COMMAND_LOG_ENTRIES = 20;
+
+export function appendCommandRouteLogEntry(
+  entries: CommandRoute[],
+  entry: CommandRoute,
+  maxEntries = MAX_COMMAND_LOG_ENTRIES,
+) {
+  return [entry, ...entries].slice(0, maxEntries);
+}
 
 export function appendParsedCommandLogEntry(
   entries: ParsedCommand[],
@@ -65,6 +89,14 @@ export function formatCommandArgument(argument: string) {
 
 export function formatApprovalState(command: ParsedCommand) {
   return command.requiresApproval ? "approval required" : "no approval";
+}
+
+export function routeTargetElementId(target: RouteTarget) {
+  return target === "none" ? null : target;
+}
+
+export function isHandledRoute(route: CommandRoute) {
+  return route.disposition === "handled" && route.target !== "none";
 }
 
 export type SpreadConfig = {

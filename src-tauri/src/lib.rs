@@ -1,7 +1,7 @@
 mod command_dock;
 mod runtime_status;
 
-use command_dock::parse_command;
+use command_dock::{parse_command, route_command};
 use runtime_status::{announce_runtime_status, get_runtime_status};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -13,7 +13,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_runtime_status,
             announce_runtime_status,
-            parse_command
+            parse_command,
+            route_command
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -2,15 +2,17 @@ import { useEffect, useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
-  appendParsedCommandLogEntry,
+  appendCommandRouteLogEntry,
   formatApprovalState,
   formatCommandError,
   formatCommandArgument,
   formatLabel,
   formatRuntimeError,
   lineSpreadOffset,
+  routeTargetElementId,
+  isHandledRoute,
   shouldSubmitCommandInput,
-  type ParsedCommand,
+  type CommandRoute,
 } from "./runtime";
 import "./App.css";
 
@@ -56,7 +58,7 @@ function App() {
   const [runtimeEvent, setRuntimeEvent] = useState<RuntimeEvent | null>(null);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [commandValue, setCommandValue] = useState("");
-  const [parsedCommands, setParsedCommands] = useState<ParsedCommand[]>([]);
+  const [commandRoutes, setCommandRoutes] = useState<CommandRoute[]>([]);
   const [commandError, setCommandError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -182,13 +184,28 @@ function App() {
     setCommandValue("");
 
     try {
-      const parsedCommand = await invoke<ParsedCommand>("parse_command", {
+      const commandRoute = await invoke<CommandRoute>("route_command", {
         input: rawCommand,
       });
 
-      setParsedCommands((entries) =>
-        appendParsedCommandLogEntry(entries, parsedCommand),
+      setCommandRoutes((entries) =>
+        appendCommandRouteLogEntry(entries, commandRoute),
       );
+
+      if (isHandledRoute(commandRoute)) {
+        const targetId = routeTargetElementId(commandRoute.target);
+        const target = targetId ? document.getElementById(targetId) : null;
+
+        if (!target) {
+          setCommandError(
+            `Route target unavailable: ${commandRoute.target}.`,
+          );
+          return;
+        }
+
+        target.scrollIntoView({ block: "start" });
+      }
+
       setCommandError(null);
     } catch (error) {
       setCommandError(formatCommandError(error));
@@ -291,36 +308,45 @@ function App() {
             </div>
           ) : null}
 
-          {parsedCommands.length > 0 ? (
+          {commandRoutes.length > 0 ? (
             <ol
               className="doc-command-log"
-              aria-label="Parsed command log"
+              aria-label="Command route log"
               aria-live="polite"
             >
-              {parsedCommands.map((command, index) => (
+              {commandRoutes.map((route, index) => (
                 <li
                   className="doc-command-log__entry"
                   data-latest={index === 0 ? "true" : undefined}
-                  key={`${command.raw}-${index}`}
+                  data-disposition={route.disposition}
+                  key={`${route.parsed.raw}-${index}`}
                 >
                   <div className="doc-command-log__meta">
-                    <span>{command.kind}</span>
+                    <span>{route.parsed.kind}</span>
                     {index === 0 ? <em>latest</em> : null}
                   </div>
                   <dl className="doc-command-log__details">
                     <div>
                       <dt>argument</dt>
-                      <dd>{formatCommandArgument(command.argument)}</dd>
+                      <dd>{formatCommandArgument(route.parsed.argument)}</dd>
                     </div>
                     <div>
                       <dt>requiresApproval</dt>
                       <dd>
-                        {String(command.requiresApproval)} ·{" "}
-                        {formatApprovalState(command)}
+                        {String(route.parsed.requiresApproval)} ·{" "}
+                        {formatApprovalState(route.parsed)}
                       </dd>
                     </div>
+                    <div>
+                      <dt>disposition</dt>
+                      <dd>{route.disposition}</dd>
+                    </div>
+                    <div>
+                      <dt>target</dt>
+                      <dd>{route.target}</dd>
+                    </div>
                   </dl>
-                  <p>{command.summary}</p>
+                  <p>{route.message}</p>
                 </li>
               ))}
             </ol>
