@@ -46,7 +46,7 @@ while IFS=$'\t' read -r id title planned; do
     action="Implement ${id} (${title}). Branch: ${impl_branch}. Verify with bun run build, bun run test, cargo test --manifest-path src-tauri/Cargo.toml; open PR: feat(${id}): ${title}."
   elif [ "$planned" = true ]; then
     state="planned — spec not written"
-    action="Write the ${id} spec PR first. Copy docs/templates/feature-spec.md to ${spec_file} on branch docs/${slug}-<slug>; open PR: Add ${id} ${title} spec."
+    action="Write the ${id} spec PR first. Copy docs/templates/feature-spec.md to ${spec_file} on branch docs/${slug}-<slug>; open PR: spec(${id}): ${title} spec."
   else
     state="spec file missing"
     action="No spec file for ${id}; write its spec PR or remove it from the backlog."

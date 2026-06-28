@@ -6,6 +6,7 @@
     { "id": "FS-002", "title": "Command dock parsing and intent routing" },
     { "id": "FS-003", "title": "Slash command navigation routing" },
     { "id": "FS-004", "title": "Specs index reader shell" },
-    { "id": "FS-005", "title": "Static spec detail selection" }
+    { "id": "FS-005", "title": "Static spec detail selection" },
+    { "id": "FS-006", "title": "Active spec artifact context", "planned": true }
   ]
 }
