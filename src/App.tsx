@@ -248,6 +248,33 @@ function App() {
   const [pushRemote, setPushRemote] = useState("");
   const [prTitle, setPrTitle] = useState("");
   const [prBody, setPrBody] = useState("");
+  const [amendSpecId, setAmendSpecId] = useState("");
+  const [amendId, setAmendId] = useState("");
+  const [amendContent, setAmendContent] = useState("");
+
+  async function requestSaveAmendment() {
+    const specId = amendSpecId.trim();
+    const amendmentId = amendId.trim();
+    if (!specId || !amendmentId || !amendContent.trim()) {
+      return;
+    }
+    try {
+      const request = await invoke<ApprovalRequest>("request_save_amendment", {
+        specId,
+        amendmentId,
+        content: amendContent,
+      });
+      setPendingApproval(request);
+      setApprovalNotice(null);
+      recordEvent("command", "approval", `requested ${request.command}`);
+    } catch (error) {
+      setApprovalNotice(
+        error instanceof Error
+          ? error.message
+          : "Could not request amendment.",
+      );
+    }
+  }
   const [pendingApproval, setPendingApproval] =
     useState<ApprovalRequest | null>(null);
   const [approvalNotice, setApprovalNotice] = useState<string | null>(null);
@@ -369,6 +396,9 @@ function App() {
         setPrTitle("");
         setPrBody("");
         setSaveSpecId("");
+        setAmendSpecId("");
+        setAmendId("");
+        setAmendContent("");
         void refreshBaseline();
       }
     } catch (error) {
@@ -979,6 +1009,36 @@ function App() {
               />
               <button type="button" onClick={requestPr}>
                 Open PR
+              </button>
+            </div>
+          ) : null}
+          {workspace ? (
+            <div className="doc-workspace__pr">
+              <input
+                aria-label="Amendment spec id"
+                placeholder="spec id (e.g. FS-005)"
+                value={amendSpecId}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => setAmendSpecId(event.target.value)}
+              />
+              <input
+                aria-label="Amendment id"
+                placeholder="amendment id (e.g. AMD-001)"
+                value={amendId}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => setAmendId(event.target.value)}
+              />
+              <textarea
+                aria-label="Amendment content"
+                placeholder="amendment content"
+                value={amendContent}
+                rows={2}
+                onChange={(event) => setAmendContent(event.target.value)}
+              />
+              <button type="button" onClick={requestSaveAmendment}>
+                Save amendment
               </button>
             </div>
           ) : null}

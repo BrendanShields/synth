@@ -32,6 +32,11 @@ enum PendingAction {
     Push(String),
     CreatePr { title: String, body: String },
     SaveSpec { spec_id: String, content: String },
+    SaveAmendment {
+        spec_id: String,
+        amendment_id: String,
+        content: String,
+    },
 }
 
 #[derive(Default)]
@@ -180,6 +185,31 @@ impl ApprovalInner {
         }
     }
 
+    fn record_save_amendment(
+        &mut self,
+        spec_id: &str,
+        amendment_id: &str,
+        content: &str,
+    ) -> ApprovalRequest {
+        let id = self.next_id;
+        self.next_id += 1;
+        let path = format!("docs/specs/{spec_id}/amendments/{amendment_id}.md");
+        self.pending.insert(
+            id,
+            PendingAction::SaveAmendment {
+                spec_id: spec_id.to_string(),
+                amendment_id: amendment_id.to_string(),
+                content: content.to_string(),
+            },
+        );
+        ApprovalRequest {
+            id,
+            action: "save-amendment".to_string(),
+            summary: format!("Save amendment {amendment_id} for {spec_id}"),
+            command: format!("write {path}"),
+        }
+    }
+
     fn take(&mut self, id: u64) -> Option<PendingAction> {
         self.pending.remove(&id)
     }
@@ -322,6 +352,36 @@ pub fn request_save_spec(
 }
 
 #[tauri::command]
+pub fn request_save_amendment(
+    approvals: tauri::State<'_, ApprovalState>,
+    workspace: tauri::State<'_, WorkspaceState>,
+    spec_id: String,
+    amendment_id: String,
+    content: String,
+) -> Result<ApprovalRequest, String> {
+    let spec = crate::workspace::spec_id_from_dir_name(&spec_id).ok_or("Invalid spec id.")?;
+    let amendment =
+        crate::workspace::amendment_id_from_name(&amendment_id).ok_or("Invalid amendment id.")?;
+    if content.trim().is_empty() || content.len() > 100_000 {
+        return Err("Invalid amendment content.".to_string());
+    }
+    if workspace
+        .0
+        .lock()
+        .expect("workspace state lock poisoned")
+        .is_none()
+    {
+        return Err("No workspace is open.".to_string());
+    }
+
+    Ok(approvals
+        .0
+        .lock()
+        .expect("approval state lock poisoned")
+        .record_save_amendment(&spec, &amendment, &content))
+}
+
+#[tauri::command]
 pub fn request_create_pr(
     approvals: tauri::State<'_, ApprovalState>,
     workspace: tauri::State<'_, WorkspaceState>,
@@ -424,6 +484,23 @@ pub fn resolve_approval(
         }
         PendingAction::SaveSpec { spec_id, content } => {
             let path = crate::workspace::write_spec_file(Path::new(&root), &spec_id, &content)?;
+            Ok(ApprovalOutcome {
+                id,
+                approved: true,
+                message: format!("Saved {path}."),
+            })
+        }
+        PendingAction::SaveAmendment {
+            spec_id,
+            amendment_id,
+            content,
+        } => {
+            let path = crate::workspace::write_amendment_file(
+                Path::new(&root),
+                &spec_id,
+                &amendment_id,
+                &content,
+            )?;
             Ok(ApprovalOutcome {
                 id,
                 approved: true,
@@ -534,6 +611,23 @@ mod tests {
             Some(PendingAction::SaveSpec {
                 spec_id: "FS-099".to_string(),
                 content: "content".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn records_save_amendment_action_with_path_command() {
+        let mut inner = ApprovalInner::default();
+        let request = inner.record_save_amendment("FS-005", "AMD-001", "deviation");
+
+        assert_eq!(request.action, "save-amendment");
+        assert_eq!(request.command, "write docs/specs/FS-005/amendments/AMD-001.md");
+        assert_eq!(
+            inner.take(request.id),
+            Some(PendingAction::SaveAmendment {
+                spec_id: "FS-005".to_string(),
+                amendment_id: "AMD-001".to_string(),
+                content: "deviation".to_string(),
             })
         );
     }
