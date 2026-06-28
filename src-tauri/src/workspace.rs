@@ -153,6 +153,66 @@ pub fn read_workspace_doc(
     })
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSpec {
+    pub spec_id: String,
+    pub path: String,
+}
+
+pub fn spec_id_from_dir_name(name: &str) -> Option<String> {
+    let digits = name.to_ascii_lowercase();
+    let digits = digits.strip_prefix("fs-")?;
+    if !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        Some(format!("FS-{digits}"))
+    } else {
+        None
+    }
+}
+
+pub fn list_workspace_specs_in(root: &Path) -> Vec<WorkspaceSpec> {
+    let specs_dir = root.join("docs/specs");
+    if !is_within_root(root, &specs_dir) {
+        return Vec::new();
+    }
+
+    let entries = match std::fs::read_dir(&specs_dir) {
+        Ok(entries) => entries,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut specs = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        let Some(spec_id) = spec_id_from_dir_name(&name) else {
+            continue;
+        };
+        let spec_md = path.join("spec.md");
+        if is_within_root(root, &spec_md) && spec_md.is_file() {
+            specs.push(WorkspaceSpec {
+                spec_id,
+                path: format!("docs/specs/{name}/spec.md"),
+            });
+        }
+    }
+
+    specs.sort_by(|a, b| a.spec_id.cmp(&b.spec_id));
+    specs
+}
+
+#[tauri::command]
+pub fn list_workspace_specs(
+    state: tauri::State<'_, WorkspaceState>,
+) -> Result<Vec<WorkspaceSpec>, String> {
+    let guard = state.0.lock().expect("workspace state lock poisoned");
+    let workspace = guard.as_ref().ok_or("No workspace is open.")?;
+    Ok(list_workspace_specs_in(Path::new(&workspace.root)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -219,6 +279,48 @@ mod tests {
         let both = detect_planning_baseline(&base);
         assert!(both.prd_present && both.erd_present && both.complete);
 
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn spec_id_classification() {
+        assert_eq!(spec_id_from_dir_name("FS-001"), Some("FS-001".to_string()));
+        assert_eq!(spec_id_from_dir_name("fs-42"), Some("FS-42".to_string()));
+        assert_eq!(spec_id_from_dir_name("FS-"), None);
+        assert_eq!(spec_id_from_dir_name("FS-1a"), None);
+        assert_eq!(spec_id_from_dir_name("notes"), None);
+        assert_eq!(spec_id_from_dir_name("ADR-0001"), None);
+    }
+
+    #[test]
+    fn lists_workspace_specs_from_a_temp_workspace() {
+        let base = std::env::temp_dir().join(format!("synth-fs015-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let specs = base.join("docs/specs");
+        std::fs::create_dir_all(specs.join("FS-002")).unwrap();
+        std::fs::create_dir_all(specs.join("FS-001")).unwrap();
+        std::fs::create_dir_all(specs.join("FS-003")).unwrap(); // no spec.md → excluded
+        std::fs::create_dir_all(specs.join("notes")).unwrap(); // non-matching → excluded
+        std::fs::write(specs.join("FS-001/spec.md"), "x").unwrap();
+        std::fs::write(specs.join("FS-002/spec.md"), "x").unwrap();
+        std::fs::write(specs.join("loose.txt"), "x").unwrap(); // file → excluded
+
+        let listed = list_workspace_specs_in(&base);
+        assert_eq!(
+            listed.iter().map(|s| s.spec_id.as_str()).collect::<Vec<_>>(),
+            vec!["FS-001", "FS-002"]
+        );
+        assert_eq!(listed[0].path, "docs/specs/FS-001/spec.md");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn missing_specs_dir_lists_empty() {
+        let base = std::env::temp_dir().join(format!("synth-fs015b-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        assert!(list_workspace_specs_in(&base).is_empty());
         let _ = std::fs::remove_dir_all(&base);
     }
 
