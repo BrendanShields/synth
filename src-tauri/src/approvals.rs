@@ -31,6 +31,7 @@ enum PendingAction {
     SwitchBranch(String),
     Push(String),
     CreatePr { title: String, body: String },
+    SaveSpec { spec_id: String, content: String },
 }
 
 #[derive(Default)]
@@ -160,6 +161,25 @@ impl ApprovalInner {
         }
     }
 
+    fn record_save_spec(&mut self, spec_id: &str, content: &str) -> ApprovalRequest {
+        let id = self.next_id;
+        self.next_id += 1;
+        let path = format!("docs/specs/{spec_id}/spec.md");
+        self.pending.insert(
+            id,
+            PendingAction::SaveSpec {
+                spec_id: spec_id.to_string(),
+                content: content.to_string(),
+            },
+        );
+        ApprovalRequest {
+            id,
+            action: "save-spec".to_string(),
+            summary: format!("Save spec {spec_id}"),
+            command: format!("write {path}"),
+        }
+    }
+
     fn take(&mut self, id: u64) -> Option<PendingAction> {
         self.pending.remove(&id)
     }
@@ -274,6 +294,34 @@ pub fn request_push(
 }
 
 #[tauri::command]
+pub fn request_save_spec(
+    approvals: tauri::State<'_, ApprovalState>,
+    workspace: tauri::State<'_, WorkspaceState>,
+    spec_id: String,
+    content: String,
+) -> Result<ApprovalRequest, String> {
+    let canonical = crate::workspace::spec_id_from_dir_name(&spec_id)
+        .ok_or("Invalid spec id.")?;
+    if content.trim().is_empty() || content.len() > 100_000 {
+        return Err("Invalid spec content.".to_string());
+    }
+    if workspace
+        .0
+        .lock()
+        .expect("workspace state lock poisoned")
+        .is_none()
+    {
+        return Err("No workspace is open.".to_string());
+    }
+
+    Ok(approvals
+        .0
+        .lock()
+        .expect("approval state lock poisoned")
+        .record_save_spec(&canonical, &content))
+}
+
+#[tauri::command]
 pub fn request_create_pr(
     approvals: tauri::State<'_, ApprovalState>,
     workspace: tauri::State<'_, WorkspaceState>,
@@ -374,6 +422,14 @@ pub fn resolve_approval(
                 },
             })
         }
+        PendingAction::SaveSpec { spec_id, content } => {
+            let path = crate::workspace::write_spec_file(Path::new(&root), &spec_id, &content)?;
+            Ok(ApprovalOutcome {
+                id,
+                approved: true,
+                message: format!("Saved {path}."),
+            })
+        }
     }
 }
 
@@ -463,6 +519,22 @@ mod tests {
         assert_eq!(
             inner.take(request.id),
             Some(PendingAction::Push("origin".to_string()))
+        );
+    }
+
+    #[test]
+    fn records_save_spec_action_with_path_command() {
+        let mut inner = ApprovalInner::default();
+        let request = inner.record_save_spec("FS-099", "content");
+
+        assert_eq!(request.action, "save-spec");
+        assert_eq!(request.command, "write docs/specs/FS-099/spec.md");
+        assert_eq!(
+            inner.take(request.id),
+            Some(PendingAction::SaveSpec {
+                spec_id: "FS-099".to_string(),
+                content: "content".to_string(),
+            })
         );
     }
 
