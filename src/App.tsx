@@ -64,6 +64,11 @@ type WorkspaceDoc = {
   text: string;
 };
 
+type WorkspaceSpec = {
+  specId: string;
+  path: string;
+};
+
 type RuntimePhase = "loading" | "ready" | "runtime-unavailable";
 
 const RUNTIME_STATUS_EVENT = "synth-runtime-status";
@@ -113,6 +118,7 @@ function App() {
   const [baseline, setBaseline] = useState<PlanningBaseline | null>(null);
   const [doc, setDoc] = useState<WorkspaceDoc | null>(null);
   const [docError, setDocError] = useState<string | null>(null);
+  const [workspaceSpecs, setWorkspaceSpecs] = useState<WorkspaceSpec[]>([]);
 
   async function viewDoc(kind: string) {
     try {
@@ -134,6 +140,13 @@ function App() {
       );
     } catch {
       setBaseline(null);
+    }
+    try {
+      setWorkspaceSpecs(
+        await invoke<WorkspaceSpec[]>("list_workspace_specs"),
+      );
+    } catch {
+      setWorkspaceSpecs([]);
     }
   }
 
@@ -605,6 +618,19 @@ function App() {
             >
               close
             </button>
+          </section>
+        ) : null}
+
+        {workspace && workspaceSpecs.length > 0 ? (
+          <section className="doc-section" id="workspace-specs">
+            <h2>Workspace specs</h2>
+            <ol className="doc-events" aria-label="Workspace specs">
+              {workspaceSpecs.map((spec) => (
+                <li className="doc-events__entry" key={spec.specId}>
+                  {spec.specId} · {spec.path}
+                </li>
+              ))}
+            </ol>
           </section>
         ) : null}
 
