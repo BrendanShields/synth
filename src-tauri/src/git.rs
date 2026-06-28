@@ -6,6 +6,7 @@ use crate::workspace::WorkspaceState;
 
 const MAX_CHANGES: usize = 200;
 const MAX_LOG: usize = 20;
+const MAX_DIFF_LINES: usize = 2000;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -159,6 +160,93 @@ pub fn create_branch(root: &Path, name: &str) -> Result<(), String> {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffLine {
+    pub kind: String,
+    pub text: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitDiff {
+    pub is_repo: bool,
+    pub empty: bool,
+    pub lines: Vec<DiffLine>,
+}
+
+pub fn parse_diff(diff: &str) -> Vec<DiffLine> {
+    diff.lines()
+        .take(MAX_DIFF_LINES)
+        .map(|line| {
+            let kind = if line.starts_with("+++")
+                || line.starts_with("---")
+                || line.starts_with("diff ")
+                || line.starts_with("@@")
+                || line.starts_with("index ")
+            {
+                "meta"
+            } else if line.starts_with('+') {
+                "add"
+            } else if line.starts_with('-') {
+                "del"
+            } else {
+                "context"
+            };
+            DiffLine {
+                kind: kind.to_string(),
+                text: line.to_string(),
+            }
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub fn git_diff(state: tauri::State<'_, WorkspaceState>) -> Result<GitDiff, String> {
+    let root = {
+        let guard = state.0.lock().expect("workspace state lock poisoned");
+        guard.as_ref().ok_or("No workspace is open.")?.root.clone()
+    };
+
+    let output = std::process::Command::new("git")
+        .current_dir(&root)
+        .args(["diff", "HEAD"])
+        .output()
+        .map_err(|error| format!("Could not run git: {error}"))?;
+
+    if output.status.success() {
+        let lines = parse_diff(&String::from_utf8_lossy(&output.stdout));
+        return Ok(GitDiff {
+            is_repo: true,
+            empty: lines.is_empty(),
+            lines,
+        });
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).to_lowercase();
+    if stderr.contains("not a git repository") {
+        Ok(GitDiff {
+            is_repo: false,
+            empty: true,
+            lines: Vec::new(),
+        })
+    } else if stderr.contains("ambiguous argument")
+        || stderr.contains("unknown revision")
+        || stderr.contains("bad revision")
+    {
+        Ok(GitDiff {
+            is_repo: true,
+            empty: true,
+            lines: Vec::new(),
+        })
+    } else {
+        Err(format!(
+            "git diff failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
+}
+
 pub fn create_pr(root: &Path, title: &str, body: &str) -> Result<String, String> {
     let output = std::process::Command::new("gh")
         .current_dir(root)
@@ -290,6 +378,38 @@ mod tests {
             input.push_str(&format!("hash{index} subject {index}\n"));
         }
         assert_eq!(parse_log(&input).len(), MAX_LOG);
+    }
+
+    #[test]
+    fn parses_unified_diff_into_classified_lines() {
+        let diff = "diff --git a/x b/x\nindex 1..2 100644\n--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n context\n-old\n+new\n";
+        let lines = parse_diff(diff);
+        let kinds: Vec<&str> = lines.iter().map(|l| l.kind.as_str()).collect();
+        assert_eq!(
+            kinds,
+            vec!["meta", "meta", "meta", "meta", "meta", "context", "del", "add"]
+        );
+    }
+
+    #[test]
+    fn diff_parser_caps_lines() {
+        let big = "+a\n".repeat(MAX_DIFF_LINES + 100);
+        assert_eq!(parse_diff(&big).len(), MAX_DIFF_LINES);
+    }
+
+    #[test]
+    fn serializes_diff_in_camel_case() {
+        let serialized = serde_json::to_value(GitDiff {
+            is_repo: true,
+            empty: false,
+            lines: vec![DiffLine {
+                kind: "add".to_string(),
+                text: "+x".to_string(),
+            }],
+        })
+        .unwrap();
+        assert_eq!(serialized["isRepo"], true);
+        assert_eq!(serialized["lines"][0]["kind"], "add");
     }
 
     #[test]
