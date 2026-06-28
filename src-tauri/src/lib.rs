@@ -1,10 +1,12 @@
 mod command_dock;
+mod git;
 mod provider;
 mod runtime_status;
 mod specs_index;
 mod workspace;
 
 use command_dock::{parse_command, route_command};
+use git::git_status;
 use provider::{ask_model, ask_spec, ask_stream, get_provider_status};
 use runtime_status::{announce_runtime_status, get_runtime_status};
 use specs_index::{get_static_spec_detail, list_specs_index};
@@ -36,7 +38,8 @@ pub fn run() {
             get_workspace,
             inspect_planning_baseline,
             read_workspace_doc,
-            list_workspace_specs
+            list_workspace_specs,
+            git_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

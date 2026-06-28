@@ -147,6 +147,25 @@ export function formatPlanningBaseline(baseline: PlanningBaseline) {
   return `planning baseline incomplete — missing ${missing}`;
 }
 
+export type GitStatus = {
+  isRepo: boolean;
+  branch: string;
+  clean: boolean;
+  changes: string[];
+};
+
+export function formatGitStatus(git: GitStatus) {
+  if (!git.isRepo) {
+    return "not a git repository";
+  }
+  const branch = git.branch || "detached HEAD";
+  if (git.clean) {
+    return `${branch} · clean`;
+  }
+  const count = git.changes.length;
+  return `${branch} · ${count} change${count === 1 ? "" : "s"}`;
+}
+
 export type SessionEventKind = "command" | "answer" | "error";
 
 export type SessionEvent = {

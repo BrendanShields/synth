@@ -5,6 +5,7 @@ import {
   appendCommandRouteLogEntry,
   appendParsedCommandLogEntry,
   appendSessionEvent,
+  formatGitStatus,
   formatPlanningBaseline,
   formatSessionEvent,
   formatActiveArtifact,
@@ -238,6 +239,42 @@ describe("active artifact", () => {
   it("uses the neutral label when no artifact is active", () => {
     expect(formatActiveArtifact(null)).toBe(NO_ACTIVE_ARTIFACT_LABEL);
     expect(NO_ACTIVE_ARTIFACT_LABEL).toBe("No active artifact");
+  });
+});
+
+describe("formatGitStatus", () => {
+  it("reports a clean repository with its branch", () => {
+    expect(
+      formatGitStatus({ isRepo: true, branch: "main", clean: true, changes: [] }),
+    ).toBe("main · clean");
+  });
+
+  it("pluralizes the change count", () => {
+    expect(
+      formatGitStatus({
+        isRepo: true,
+        branch: "x",
+        clean: false,
+        changes: ["?? a"],
+      }),
+    ).toBe("x · 1 change");
+    expect(
+      formatGitStatus({
+        isRepo: true,
+        branch: "x",
+        clean: false,
+        changes: ["?? a", " M b"],
+      }),
+    ).toBe("x · 2 changes");
+  });
+
+  it("handles detached HEAD and non-repositories", () => {
+    expect(
+      formatGitStatus({ isRepo: true, branch: "", clean: true, changes: [] }),
+    ).toBe("detached HEAD · clean");
+    expect(
+      formatGitStatus({ isRepo: false, branch: "", clean: true, changes: [] }),
+    ).toBe("not a git repository");
   });
 });
 
