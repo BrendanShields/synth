@@ -4,7 +4,7 @@ mod runtime_status;
 mod specs_index;
 
 use command_dock::{parse_command, route_command};
-use provider::{ask_model, ask_spec, get_provider_status};
+use provider::{ask_model, ask_spec, ask_stream, get_provider_status};
 use runtime_status::{announce_runtime_status, get_runtime_status};
 use specs_index::{get_static_spec_detail, list_specs_index};
 
@@ -23,7 +23,8 @@ pub fn run() {
             get_static_spec_detail,
             get_provider_status,
             ask_model,
-            ask_spec
+            ask_spec,
+            ask_stream
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
