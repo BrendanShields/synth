@@ -60,7 +60,15 @@
     },
     {
       "id": "FS-015",
-      "title": "List workspace specs",
+      "title": "List workspace specs"
+    },
+    {
+      "id": "FS-016",
+      "title": "Read-only git status"
+    },
+    {
+      "id": "FS-017",
+      "title": "Read-only git log",
       "planned": true
     }
   ]
