@@ -696,6 +696,23 @@ input {
   color: var(--accent);
 }
 
+.doc-classification {
+  display: grid;
+  gap: 10px;
+}
+
+.doc-classification__head {
+  margin: 0;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.7rem;
+}
+
+.doc-classification[data-kind="project"] .doc-classification__head {
+  color: var(--accent);
+}
+
 .doc-events {
   margin: 18px 0 0;
   padding: 0;
