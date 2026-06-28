@@ -8,8 +8,10 @@ import {
   formatCommandArgument,
   formatLabel,
   formatRuntimeError,
+  formatSpecDetailError,
   formatSpecsIndexError,
   formatSpecsIndexSource,
+  handledSpecDetailId,
   isHandledRoute,
   lineSpreadOffset,
   routeTargetElementId,
@@ -150,10 +152,30 @@ describe("command dock helpers", () => {
   it("maps route targets to existing element ids or no target", () => {
     expect(routeTargetElementId("summary")).toBe("summary");
     expect(routeTargetElementId("specs")).toBe("specs");
+    expect(routeTargetElementId("spec-detail")).toBe("spec-detail");
     expect(routeTargetElementId("runtime-status")).toBe("runtime-status");
     expect(routeTargetElementId("event-stream")).toBe("event-stream");
     expect(routeTargetElementId("phase")).toBe("phase");
     expect(routeTargetElementId("none")).toBeNull();
+  });
+
+  it("extracts the canonical id only from handled spec-detail routes", () => {
+    const specDetailRoute: CommandRoute = {
+      parsed: navigateCommand,
+      disposition: "handled",
+      target: "spec-detail",
+      message: "Handled static spec detail route to FS-001.",
+      resource: "FS-001",
+    };
+
+    expect(handledSpecDetailId(specDetailRoute)).toBe("FS-001");
+    expect(handledSpecDetailId(handledRoute)).toBeNull();
+    expect(
+      handledSpecDetailId({ ...specDetailRoute, resource: undefined }),
+    ).toBeNull();
+    expect(
+      handledSpecDetailId({ ...specDetailRoute, disposition: "unsupported" }),
+    ).toBeNull();
   });
 
   it("identifies only handled non-none routes as navigable", () => {
@@ -166,6 +188,19 @@ describe("command dock helpers", () => {
         target: "none",
       }),
     ).toBe(false);
+  });
+});
+
+describe("formatSpecDetailError", () => {
+  it("uses specific spec-detail fallback copy for unknown errors", () => {
+    expect(formatSpecDetailError(undefined)).toBe("Spec detail is unavailable.");
+  });
+
+  it("passes through known errors", () => {
+    expect(formatSpecDetailError(new Error("No static spec detail"))).toBe(
+      "No static spec detail",
+    );
+    expect(formatSpecDetailError("unknown spec")).toBe("unknown spec");
   });
 });
 

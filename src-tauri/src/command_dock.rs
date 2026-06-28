@@ -18,6 +18,8 @@ pub struct CommandRoute {
     pub disposition: RouteDisposition,
     pub target: RouteTarget,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -47,6 +49,7 @@ pub enum RouteDisposition {
 pub enum RouteTarget {
     Summary,
     Specs,
+    SpecDetail,
     RuntimeStatus,
     EventStream,
     Phase,
@@ -179,6 +182,7 @@ fn route_navigation(parsed: ParsedCommand) -> CommandRoute {
             RouteTarget::Specs,
             "Handled slash navigation route to the specs index.",
         ),
+        other if other.starts_with("specs/") => route_spec_detail(parsed, &other["specs/".len()..]),
         "runtime-status" | "runtime" => route(
             parsed,
             RouteDisposition::Handled,
@@ -198,6 +202,25 @@ fn route_navigation(parsed: ParsedCommand) -> CommandRoute {
             "Handled slash navigation route to the phase section.",
         ),
         _ => unsupported_route(parsed, "Slash navigation route is not available yet."),
+    }
+}
+
+fn route_spec_detail(parsed: ParsedCommand, raw_spec_id: &str) -> CommandRoute {
+    match crate::specs_index::lookup_static_spec_detail(raw_spec_id) {
+        Ok(detail) => CommandRoute {
+            message: format!(
+                "Handled static spec detail route to {}.",
+                detail.spec_id
+            ),
+            resource: Some(detail.spec_id),
+            parsed,
+            disposition: RouteDisposition::Handled,
+            target: RouteTarget::SpecDetail,
+        },
+        Err(_) => unsupported_route(
+            parsed,
+            "Requested static spec detail is not available; that spec id is unknown.",
+        ),
     }
 }
 
@@ -221,6 +244,7 @@ fn route(
         disposition,
         target,
         message: message.to_string(),
+        resource: None,
     }
 }
 
@@ -504,6 +528,50 @@ mod tests {
                 "message": "Handled slash navigation route to the specs index."
             })
         );
+    }
+
+    #[test]
+    fn routes_known_static_spec_detail_commands_to_canonical_ids() {
+        let upper = route_raw_command("/specs/FS-001");
+        assert_eq!(upper.disposition, RouteDisposition::Handled);
+        assert_eq!(upper.target, RouteTarget::SpecDetail);
+        assert_eq!(upper.resource.as_deref(), Some("FS-001"));
+
+        let lower = route_raw_command("/specs/fs-002");
+        assert_eq!(lower.disposition, RouteDisposition::Handled);
+        assert_eq!(lower.target, RouteTarget::SpecDetail);
+        assert_eq!(lower.resource.as_deref(), Some("FS-002"));
+        assert!(lower.message.contains("FS-002"));
+    }
+
+    #[test]
+    fn returns_unsupported_for_unknown_static_spec_detail() {
+        let route = route_raw_command("/specs/FS-999");
+
+        assert_eq!(route.parsed.kind, CommandKind::Navigate);
+        assert_eq!(route.disposition, RouteDisposition::Unsupported);
+        assert_eq!(route.target, RouteTarget::None);
+        assert_eq!(route.resource, None);
+        assert!(route.message.contains("not available"));
+    }
+
+    #[test]
+    fn plain_specs_route_still_targets_the_index_not_a_detail() {
+        let route = route_raw_command("/specs");
+
+        assert_eq!(route.disposition, RouteDisposition::Handled);
+        assert_eq!(route.target, RouteTarget::Specs);
+        assert_eq!(route.resource, None);
+    }
+
+    #[test]
+    fn serializes_spec_detail_route_with_resource_for_the_react_ipc_contract() {
+        let serialized = serde_json::to_value(route_raw_command("/specs/fs-003")).unwrap();
+
+        assert_eq!(serialized["disposition"], json!("handled"));
+        assert_eq!(serialized["target"], json!("spec-detail"));
+        assert_eq!(serialized["resource"], json!("FS-003"));
+        assert_eq!(serialized["parsed"]["argument"], json!("specs/fs-003"));
     }
 
     fn assert_command(
