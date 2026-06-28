@@ -1,7 +1,10 @@
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::Serialize;
+
+const MAX_DOC_BYTES: u64 = 262_144;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -101,6 +104,55 @@ pub fn inspect_planning_baseline(
     Ok(detect_planning_baseline(Path::new(&workspace.root)))
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceDoc {
+    pub kind: String,
+    pub path: String,
+    pub text: String,
+}
+
+pub fn workspace_doc_path(kind: &str) -> Option<&'static str> {
+    match kind {
+        "prd" => Some("docs/PRD.md"),
+        "erd" => Some("docs/engineering/ERD.md"),
+        _ => None,
+    }
+}
+
+fn read_capped(path: &Path, cap: u64) -> Result<String, String> {
+    let file = std::fs::File::open(path).map_err(|_| "Cannot read document.".to_string())?;
+    let mut buffer = Vec::new();
+    file.take(cap)
+        .read_to_end(&mut buffer)
+        .map_err(|error| format!("read error: {error}"))?;
+    Ok(String::from_utf8_lossy(&buffer).to_string())
+}
+
+#[tauri::command]
+pub fn read_workspace_doc(
+    state: tauri::State<'_, WorkspaceState>,
+    kind: String,
+) -> Result<WorkspaceDoc, String> {
+    let relative =
+        workspace_doc_path(&kind).ok_or_else(|| format!("Unknown document: {kind}"))?;
+
+    let guard = state.0.lock().expect("workspace state lock poisoned");
+    let workspace = guard.as_ref().ok_or("No workspace is open.")?;
+    let root = Path::new(&workspace.root);
+    let candidate = root.join(relative);
+
+    if !is_within_root(root, &candidate) {
+        return Err("Path escapes the workspace.".to_string());
+    }
+
+    Ok(WorkspaceDoc {
+        kind,
+        path: relative.to_string(),
+        text: read_capped(&candidate, MAX_DOC_BYTES)?,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,6 +220,39 @@ mod tests {
         assert!(both.prd_present && both.erd_present && both.complete);
 
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn workspace_doc_path_allow_list() {
+        assert_eq!(workspace_doc_path("prd"), Some("docs/PRD.md"));
+        assert_eq!(workspace_doc_path("erd"), Some("docs/engineering/ERD.md"));
+        assert_eq!(workspace_doc_path("secrets"), None);
+        assert_eq!(workspace_doc_path(""), None);
+    }
+
+    #[test]
+    fn read_capped_truncates_to_the_cap() {
+        let path =
+            std::env::temp_dir().join(format!("synth-fs014-{}.txt", std::process::id()));
+        std::fs::write(&path, "hello world").unwrap();
+
+        assert_eq!(read_capped(&path, 5).unwrap(), "hello");
+        assert_eq!(read_capped(&path, 1000).unwrap(), "hello world");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn serializes_workspace_doc_in_camel_case() {
+        let serialized = serde_json::to_value(WorkspaceDoc {
+            kind: "prd".to_string(),
+            path: "docs/PRD.md".to_string(),
+            text: "hi".to_string(),
+        })
+        .unwrap();
+        assert_eq!(serialized["kind"], "prd");
+        assert_eq!(serialized["path"], "docs/PRD.md");
+        assert_eq!(serialized["text"], "hi");
     }
 
     #[test]

@@ -58,6 +58,12 @@ type Workspace = {
   name: string;
 };
 
+type WorkspaceDoc = {
+  kind: string;
+  path: string;
+  text: string;
+};
+
 type RuntimePhase = "loading" | "ready" | "runtime-unavailable";
 
 const RUNTIME_STATUS_EVENT = "synth-runtime-status";
@@ -105,6 +111,21 @@ function App() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [baseline, setBaseline] = useState<PlanningBaseline | null>(null);
+  const [doc, setDoc] = useState<WorkspaceDoc | null>(null);
+  const [docError, setDocError] = useState<string | null>(null);
+
+  async function viewDoc(kind: string) {
+    try {
+      const opened = await invoke<WorkspaceDoc>("read_workspace_doc", { kind });
+      setDoc(opened);
+      setDocError(null);
+      recordEvent("command", "read", opened.path);
+    } catch (error) {
+      setDocError(
+        error instanceof Error ? error.message : "Could not read document.",
+      );
+    }
+  }
 
   async function refreshBaseline() {
     try {
@@ -547,7 +568,45 @@ function App() {
               {formatPlanningBaseline(baseline)}
             </p>
           ) : null}
+          {workspace && baseline && (baseline.prdPresent || baseline.erdPresent) ? (
+            <div className="doc-workspace__docs">
+              {baseline.prdPresent ? (
+                <button type="button" onClick={() => viewDoc("prd")}>
+                  PRD
+                </button>
+              ) : null}
+              {baseline.erdPresent ? (
+                <button type="button" onClick={() => viewDoc("erd")}>
+                  ERD
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </header>
+
+        {doc || docError ? (
+          <section className="doc-section" id="reader">
+            <h2>{doc ? doc.path : "Document"}</h2>
+            {docError ? (
+              <div className="doc-error" role="status">
+                <strong>Document unavailable</strong>
+                <span>{docError}</span>
+              </div>
+            ) : doc ? (
+              <pre className="doc-reader">{doc.text}</pre>
+            ) : null}
+            <button
+              type="button"
+              className="doc-reader__close"
+              onClick={() => {
+                setDoc(null);
+                setDocError(null);
+              }}
+            >
+              close
+            </button>
+          </section>
+        ) : null}
 
         <p className="doc-prose">
           {runtimeStatus?.summary ??
