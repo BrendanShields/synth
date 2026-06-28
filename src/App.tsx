@@ -9,6 +9,7 @@ import {
   formatApprovalState,
   formatCommandError,
   formatCommandArgument,
+  formatGitStatus,
   formatLabel,
   formatModelError,
   formatPlanningBaseline,
@@ -25,6 +26,7 @@ import {
   isHandledRoute,
   shouldSubmitCommandInput,
   type CommandRoute,
+  type GitStatus,
   type PlanningBaseline,
   type ProviderStatus,
   type SessionEvent,
@@ -119,6 +121,7 @@ function App() {
   const [doc, setDoc] = useState<WorkspaceDoc | null>(null);
   const [docError, setDocError] = useState<string | null>(null);
   const [workspaceSpecs, setWorkspaceSpecs] = useState<WorkspaceSpec[]>([]);
+  const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
 
   async function viewDoc(kind: string) {
     try {
@@ -147,6 +150,11 @@ function App() {
       );
     } catch {
       setWorkspaceSpecs([]);
+    }
+    try {
+      setGitStatus(await invoke<GitStatus>("git_status"));
+    } catch {
+      setGitStatus(null);
     }
   }
 
@@ -579,6 +587,14 @@ function App() {
               data-complete={baseline.complete}
             >
               {formatPlanningBaseline(baseline)}
+            </p>
+          ) : null}
+          {workspace && gitStatus ? (
+            <p
+              className="doc-workspace__git doc-prose--mono"
+              data-clean={gitStatus.isRepo ? gitStatus.clean : undefined}
+            >
+              {formatGitStatus(gitStatus)}
             </p>
           ) : null}
           {workspace && baseline && (baseline.prdPresent || baseline.erdPresent) ? (

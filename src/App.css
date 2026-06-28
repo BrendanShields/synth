@@ -765,6 +765,15 @@ input {
   color: var(--accent);
 }
 
+.doc-workspace__git {
+  margin: 6px 0 0;
+  color: var(--ink-faint);
+}
+
+.doc-workspace__git[data-clean="false"] {
+  color: #9a5036;
+}
+
 .doc-workspace__docs {
   display: flex;
   gap: 10px;
