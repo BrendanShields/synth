@@ -159,6 +159,23 @@ pub fn create_branch(root: &Path, name: &str) -> Result<(), String> {
     }
 }
 
+pub fn push(root: &Path, remote: &str) -> Result<(), String> {
+    let output = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["push", "-u", remote, "HEAD"])
+        .output()
+        .map_err(|error| format!("Could not run git: {error}"))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "git push failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
+}
+
 pub fn switch_branch(root: &Path, name: &str) -> Result<(), String> {
     let output = std::process::Command::new("git")
         .current_dir(root)
@@ -296,6 +313,38 @@ mod tests {
         assert!(create_branch(&dir, "feature/x").is_err());
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn push_lands_branch_on_a_local_bare_remote() {
+        let base = std::env::temp_dir().join(format!("synth-fs021-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let work = base.join("work");
+        let bare = base.join("bare.git");
+        std::fs::create_dir_all(&work).unwrap();
+        std::fs::create_dir_all(&bare).unwrap();
+
+        let run = |dir: &Path, args: &[&str]| {
+            std::process::Command::new("git")
+                .current_dir(dir)
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        run(&bare, &["init", "--bare", "-q"]);
+        run(&work, &["init", "-q"]);
+        run(&work, &["config", "user.email", "t@t"]);
+        run(&work, &["config", "user.name", "t"]);
+        run(&work, &["commit", "--allow-empty", "-q", "-m", "init"]);
+        run(&work, &["remote", "add", "origin", &bare.to_string_lossy()]);
+
+        assert!(push(&work, "origin").is_ok());
+        let refs = run(&work, &["ls-remote", "origin"]);
+        assert!(!String::from_utf8_lossy(&refs.stdout).trim().is_empty());
+
+        assert!(push(&work, "no-such-remote").is_err());
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

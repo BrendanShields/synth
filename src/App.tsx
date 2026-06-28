@@ -144,6 +144,7 @@ function App() {
   const [branchName, setBranchName] = useState("");
   const [commitMessage, setCommitMessage] = useState("");
   const [switchTarget, setSwitchTarget] = useState("");
+  const [pushRemote, setPushRemote] = useState("");
   const [pendingApproval, setPendingApproval] =
     useState<ApprovalRequest | null>(null);
   const [approvalNotice, setApprovalNotice] = useState<string | null>(null);
@@ -205,6 +206,21 @@ function App() {
     }
   }
 
+  async function requestPush() {
+    try {
+      const request = await invoke<ApprovalRequest>("request_push", {
+        remote: pushRemote.trim(),
+      });
+      setPendingApproval(request);
+      setApprovalNotice(null);
+      recordEvent("command", "approval", `requested ${request.command}`);
+    } catch (error) {
+      setApprovalNotice(
+        error instanceof Error ? error.message : "Could not request push.",
+      );
+    }
+  }
+
   async function resolveApproval(approved: boolean) {
     if (!pendingApproval) {
       return;
@@ -226,6 +242,7 @@ function App() {
         setBranchName("");
         setCommitMessage("");
         setSwitchTarget("");
+        setPushRemote("");
         void refreshBaseline();
       }
     } catch (error) {
@@ -757,6 +774,21 @@ function App() {
               />
               <button type="button" onClick={requestSwitch}>
                 Switch
+              </button>
+            </div>
+          ) : null}
+          {workspace && gitStatus?.isRepo ? (
+            <div className="doc-workspace__branch">
+              <input
+                aria-label="Push remote"
+                placeholder="push remote (origin)"
+                value={pushRemote}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => setPushRemote(event.target.value)}
+              />
+              <button type="button" onClick={requestPush}>
+                Push
               </button>
             </div>
           ) : null}

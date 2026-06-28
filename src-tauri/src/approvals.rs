@@ -29,6 +29,7 @@ enum PendingAction {
     CreateBranch(String),
     Commit(String),
     SwitchBranch(String),
+    Push(String),
 }
 
 #[derive(Default)]
@@ -56,6 +57,18 @@ pub fn is_valid_branch_name(name: &str) -> bool {
 
 pub fn is_valid_commit_message(message: &str) -> bool {
     !message.trim().is_empty() && message.len() <= 2000
+}
+
+pub fn is_valid_remote_name(remote: &str) -> bool {
+    if remote.is_empty() || remote.len() > 100 || remote.starts_with('-') {
+        return false;
+    }
+    if remote.contains("..") {
+        return false;
+    }
+    remote
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
 }
 
 impl ApprovalInner {
@@ -95,6 +108,19 @@ impl ApprovalInner {
             action: "switch-branch".to_string(),
             summary: format!("Switch to branch {name}"),
             command: format!("git switch {name}"),
+        }
+    }
+
+    fn record_push(&mut self, remote: &str) -> ApprovalRequest {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.pending
+            .insert(id, PendingAction::Push(remote.to_string()));
+        ApprovalRequest {
+            id,
+            action: "push".to_string(),
+            summary: format!("Push current branch to {remote}"),
+            command: format!("git push -u {remote} HEAD"),
         }
     }
 
@@ -179,6 +205,39 @@ pub fn request_switch_branch(
 }
 
 #[tauri::command]
+pub fn request_push(
+    approvals: tauri::State<'_, ApprovalState>,
+    workspace: tauri::State<'_, WorkspaceState>,
+    remote: String,
+) -> Result<ApprovalRequest, String> {
+    let remote = {
+        let trimmed = remote.trim();
+        if trimmed.is_empty() {
+            "origin".to_string()
+        } else {
+            trimmed.to_string()
+        }
+    };
+    if !is_valid_remote_name(&remote) {
+        return Err("Invalid remote name.".to_string());
+    }
+    if workspace
+        .0
+        .lock()
+        .expect("workspace state lock poisoned")
+        .is_none()
+    {
+        return Err("No workspace is open.".to_string());
+    }
+
+    Ok(approvals
+        .0
+        .lock()
+        .expect("approval state lock poisoned")
+        .record_push(&remote))
+}
+
+#[tauri::command]
 pub fn resolve_approval(
     approvals: tauri::State<'_, ApprovalState>,
     workspace: tauri::State<'_, WorkspaceState>,
@@ -228,6 +287,14 @@ pub fn resolve_approval(
                 id,
                 approved: true,
                 message: format!("Switched to branch {name}."),
+            })
+        }
+        PendingAction::Push(remote) => {
+            git::push(Path::new(&root), &remote)?;
+            Ok(ApprovalOutcome {
+                id,
+                approved: true,
+                message: format!("Pushed to {remote}."),
             })
         }
     }
@@ -296,6 +363,29 @@ mod tests {
         assert_eq!(
             inner.take(request.id),
             Some(PendingAction::SwitchBranch("feature/x".to_string()))
+        );
+    }
+
+    #[test]
+    fn validates_remote_names() {
+        for remote in ["origin", "upstream", "my-fork", "r1.2"] {
+            assert!(is_valid_remote_name(remote), "{remote} should be valid");
+        }
+        for remote in ["", "-x", "a/b", "has space", "https://x", "a..b"] {
+            assert!(!is_valid_remote_name(remote), "{remote} should be invalid");
+        }
+    }
+
+    #[test]
+    fn records_push_action_with_exact_command() {
+        let mut inner = ApprovalInner::default();
+        let request = inner.record_push("origin");
+
+        assert_eq!(request.action, "push");
+        assert_eq!(request.command, "git push -u origin HEAD");
+        assert_eq!(
+            inner.take(request.id),
+            Some(PendingAction::Push("origin".to_string()))
         );
     }
 
