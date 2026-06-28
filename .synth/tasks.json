@@ -1,19 +1,67 @@
 {
   "project": "Synth",
-  "note": "Ordered feature-spec backlog — the plan to follow. Each spec ships as a spec PR (docs/fs-NNN-*) then an implementation PR (synth/fs-NNN-*); see CLAUDE.md. Live PR + merge state is NOT stored here — it is computed at session start by .claude/hooks/synth-next.sh from git history and `gh`. Add the next planned spec here (with \"planned\": true) before it has a spec file so the hook can point at it.",
+  "note": "Ordered feature-spec backlog \u2014 the plan to follow. Each spec ships as a spec PR (docs/fs-NNN-*) then an implementation PR (synth/fs-NNN-*); see CLAUDE.md. Live PR + merge state is NOT stored here \u2014 it is computed at session start by .claude/hooks/synth-next.sh from git history and `gh`. Add the next planned spec here (with \"planned\": true) before it has a spec file so the hook can point at it.",
   "specs": [
-    { "id": "FS-001", "title": "Runtime event bridge and Synth shell" },
-    { "id": "FS-002", "title": "Command dock parsing and intent routing" },
-    { "id": "FS-003", "title": "Slash command navigation routing" },
-    { "id": "FS-004", "title": "Specs index reader shell" },
-    { "id": "FS-005", "title": "Static spec detail selection" },
-    { "id": "FS-006", "title": "Active spec artifact context" },
-    { "id": "FS-007", "title": "Ollama provider status" },
-    { "id": "FS-008", "title": "Ask-the-model single-shot completion" },
-    { "id": "FS-009", "title": "Ask the active spec artifact" },
-    { "id": "FS-010", "title": "Streaming model answers" },
-    { "id": "FS-011", "title": "In-session event log" },
-    { "id": "FS-012", "title": "Open a jailed workspace" },
-    { "id": "FS-013", "title": "Detect the workspace planning baseline", "planned": true }
+    {
+      "id": "FS-001",
+      "title": "Runtime event bridge and Synth shell"
+    },
+    {
+      "id": "FS-002",
+      "title": "Command dock parsing and intent routing"
+    },
+    {
+      "id": "FS-003",
+      "title": "Slash command navigation routing"
+    },
+    {
+      "id": "FS-004",
+      "title": "Specs index reader shell"
+    },
+    {
+      "id": "FS-005",
+      "title": "Static spec detail selection"
+    },
+    {
+      "id": "FS-006",
+      "title": "Active spec artifact context"
+    },
+    {
+      "id": "FS-007",
+      "title": "Ollama provider status"
+    },
+    {
+      "id": "FS-008",
+      "title": "Ask-the-model single-shot completion"
+    },
+    {
+      "id": "FS-009",
+      "title": "Ask the active spec artifact"
+    },
+    {
+      "id": "FS-010",
+      "title": "Streaming model answers"
+    },
+    {
+      "id": "FS-011",
+      "title": "In-session event log"
+    },
+    {
+      "id": "FS-012",
+      "title": "Open a jailed workspace"
+    },
+    {
+      "id": "FS-013",
+      "title": "Detect the workspace planning baseline"
+    },
+    {
+      "id": "FS-014",
+      "title": "Read a workspace planning document"
+    },
+    {
+      "id": "FS-015",
+      "title": "List workspace specs",
+      "planned": true
+    }
   ]
 }
