@@ -131,6 +131,32 @@ function App() {
   const [answerGrounding, setAnswerGrounding] = useState<string | null>(null);
   const [classification, setClassification] =
     useState<RequestClassification | null>(null);
+  const [classificationRequest, setClassificationRequest] = useState("");
+  const [specDraft, setSpecDraft] = useState<string | null>(null);
+  const [draftPending, setDraftPending] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+
+  async function draftSpec() {
+    if (!classificationRequest) {
+      return;
+    }
+    setDraftPending(true);
+    setDraftError(null);
+    setSpecDraft(null);
+    try {
+      const result = await invoke<{ request: string; draft: string }>(
+        "draft_spec",
+        { request: classificationRequest },
+      );
+      setSpecDraft(result.draft);
+    } catch (error) {
+      setDraftError(
+        error instanceof Error ? error.message : "Could not draft a spec.",
+      );
+    } finally {
+      setDraftPending(false);
+    }
+  }
   const requestCounter = useRef(0);
   const currentRequest = useRef(0);
   const currentAsk = useRef<{ prompt: string; grounding: string | null } | null>(
@@ -585,6 +611,9 @@ function App() {
     answerError,
     answerGrounding,
     classification,
+    specDraft,
+    draftPending,
+    draftError,
     sessionEvents,
   ]);
 
@@ -666,6 +695,9 @@ function App() {
 
         const request = handledClassificationRequest(commandRoute);
         if (request) {
+          setClassificationRequest(request);
+          setSpecDraft(null);
+          setDraftError(null);
           void invoke<RequestClassification>("classify_request", {
             input: request,
           })
@@ -1097,6 +1129,24 @@ function App() {
                 {classification.kind} · {formatClassificationGate(classification)}
               </p>
               <p className="doc-prose">{classification.rationale}</p>
+              {classification.specRequired ? (
+                <button
+                  type="button"
+                  className="doc-reader__close"
+                  onClick={draftSpec}
+                  disabled={draftPending}
+                >
+                  {draftPending ? "Drafting…" : "Draft spec"}
+                </button>
+              ) : null}
+              {draftError ? (
+                <div className="doc-error" role="status">
+                  <strong>Draft unavailable</strong>
+                  <span>{draftError}</span>
+                </div>
+              ) : specDraft ? (
+                <pre className="doc-reader">{specDraft}</pre>
+              ) : null}
             </div>
           ) : (
             <p className="doc-prose doc-prose--muted" role="status">
