@@ -8,6 +8,7 @@ import {
   formatCommandError,
   formatCommandArgument,
   formatLabel,
+  formatProviderState,
   formatRuntimeError,
   formatSpecDetailError,
   formatSpecsIndexError,
@@ -18,6 +19,7 @@ import {
   isHandledRoute,
   shouldSubmitCommandInput,
   type CommandRoute,
+  type ProviderStatus,
   type SpecsIndex,
   type StaticSpecDetail,
 } from "./runtime";
@@ -71,6 +73,9 @@ function App() {
   const [specsIndexError, setSpecsIndexError] = useState<string | null>(null);
   const [specDetail, setSpecDetail] = useState<StaticSpecDetail | null>(null);
   const [specDetailError, setSpecDetailError] = useState<string | null>(null);
+  const [providerStatus, setProviderStatus] = useState<ProviderStatus | null>(
+    null,
+  );
 
   useEffect(() => {
     let active = true;
@@ -160,6 +165,26 @@ function App() {
     }
 
     loadSpecsIndex();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    invoke<ProviderStatus>("get_provider_status")
+      .then((status) => {
+        if (active) {
+          setProviderStatus(status);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setProviderStatus(null);
+        }
+      });
 
     return () => {
       active = false;
@@ -468,6 +493,10 @@ function App() {
               Waiting for the trusted runtime status snapshot…
             </p>
           )}
+          <p className="doc-provider doc-prose--mono" role="status">
+            {providerStatus?.model ?? "ollama"} ·{" "}
+            {formatProviderState(providerStatus)}
+          </p>
         </section>
 
         <section className="doc-section" id="event-stream">

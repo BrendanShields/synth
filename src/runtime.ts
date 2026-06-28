@@ -90,6 +90,26 @@ export function formatActiveArtifact(detail: StaticSpecDetail | null) {
     : NO_ACTIVE_ARTIFACT_LABEL;
 }
 
+export type ProviderStatus = {
+  kind: string;
+  baseUrl: string;
+  model: string;
+  state: "reachable" | "unreachable";
+  modelPresent: boolean;
+  availableModels: string[];
+  detail: string;
+};
+
+export function formatProviderState(status: ProviderStatus | null) {
+  if (!status) {
+    return "connecting";
+  }
+  if (status.state !== "reachable") {
+    return "offline";
+  }
+  return status.modelPresent ? "ready" : "model missing";
+}
+
 export type ParsedCommandKind =
   | "navigate"
   | "ask"
