@@ -144,6 +144,26 @@ function App() {
   const [providerStatus, setProviderStatus] = useState<ProviderStatus | null>(
     null,
   );
+  const [providerBaseUrl, setProviderBaseUrl] = useState("");
+  const [providerModel, setProviderModel] = useState("");
+  const [providerConfigError, setProviderConfigError] = useState<string | null>(
+    null,
+  );
+
+  async function saveProviderConfig() {
+    try {
+      await invoke<{ baseUrl: string; model: string }>("set_provider_config", {
+        baseUrl: providerBaseUrl.trim(),
+        model: providerModel.trim(),
+      });
+      setProviderConfigError(null);
+      setProviderStatus(await invoke<ProviderStatus>("get_provider_status"));
+    } catch (error) {
+      setProviderConfigError(
+        error instanceof Error ? error.message : "Could not save provider.",
+      );
+    }
+  }
   const [answerPrompt, setAnswerPrompt] = useState<string | null>(null);
   const [answerText, setAnswerText] = useState("");
   const [answerPending, setAnswerPending] = useState(false);
@@ -535,6 +555,15 @@ function App() {
           setProviderStatus(null);
         }
       });
+
+    invoke<{ baseUrl: string; model: string }>("get_provider_config")
+      .then((config) => {
+        if (active) {
+          setProviderBaseUrl(config.baseUrl);
+          setProviderModel(config.model);
+        }
+      })
+      .catch(() => {});
 
     return () => {
       active = false;
@@ -1261,6 +1290,32 @@ function App() {
             {providerStatus?.model ?? "ollama"} ·{" "}
             {formatProviderState(providerStatus)}
           </p>
+          <div className="doc-workspace__branch">
+            <input
+              aria-label="Provider base URL"
+              placeholder="base url"
+              value={providerBaseUrl}
+              spellCheck={false}
+              autoComplete="off"
+              onChange={(event) => setProviderBaseUrl(event.target.value)}
+            />
+            <input
+              aria-label="Provider model"
+              placeholder="model"
+              value={providerModel}
+              spellCheck={false}
+              autoComplete="off"
+              onChange={(event) => setProviderModel(event.target.value)}
+            />
+            <button type="button" onClick={saveProviderConfig}>
+              Save
+            </button>
+          </div>
+          {providerConfigError ? (
+            <p className="doc-workspace__notice doc-prose--mono">
+              {providerConfigError}
+            </p>
+          ) : null}
         </section>
 
         <section className="doc-section" id="event-stream">

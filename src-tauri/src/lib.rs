@@ -16,7 +16,10 @@ use autonomy::{get_autonomy_mode, set_autonomy_mode, AutonomyState};
 use classify::classify_request;
 use command_dock::{parse_command, route_command};
 use git::{git_diff, git_log, git_status};
-use provider::{ask_model, ask_spec, ask_stream, draft_spec, get_provider_status};
+use provider::{
+    ask_model, ask_spec, ask_stream, draft_spec, get_provider_config, get_provider_status,
+    set_provider_config, ProviderState,
+};
 use runtime_status::{announce_runtime_status, get_runtime_status};
 use specs_index::{get_static_spec_detail, list_specs_index};
 use workspace::{
@@ -34,6 +37,7 @@ pub fn run() {
         .manage(WorkspaceState::default())
         .manage(ApprovalState::default())
         .manage(AutonomyState::default())
+        .manage(ProviderState::default())
         .invoke_handler(tauri::generate_handler![
             get_runtime_status,
             announce_runtime_status,
@@ -63,7 +67,9 @@ pub fn run() {
             classify_request,
             draft_spec,
             get_autonomy_mode,
-            set_autonomy_mode
+            set_autonomy_mode,
+            get_provider_config,
+            set_provider_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
