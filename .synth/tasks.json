@@ -92,7 +92,19 @@
     },
     {
       "id": "FS-023",
-      "title": "Request classification",
+      "title": "Request classification"
+    },
+    {
+      "id": "FS-024",
+      "title": "Model-assisted spec drafting"
+    },
+    {
+      "id": "FS-025",
+      "title": "Approval-gated spec save"
+    },
+    {
+      "id": "FS-026",
+      "title": "Autonomy mode",
       "planned": true
     }
   ]
