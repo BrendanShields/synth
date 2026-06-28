@@ -691,6 +691,11 @@ input {
   content: "? ";
 }
 
+.doc-answer__grounding {
+  margin-left: 10px;
+  color: var(--accent);
+}
+
 @media (max-width: 920px) {
   .doc-nav {
     display: none;

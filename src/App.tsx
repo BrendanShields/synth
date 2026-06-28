@@ -82,6 +82,7 @@ function App() {
   const [answer, setAnswer] = useState<ModelAnswer | null>(null);
   const [answerPending, setAnswerPending] = useState(false);
   const [answerError, setAnswerError] = useState<string | null>(null);
+  const [answerGrounding, setAnswerGrounding] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -253,6 +254,7 @@ function App() {
     answer,
     answerPending,
     answerError,
+    answerGrounding,
   ]);
 
   async function selectSpecDetail(specId: string) {
@@ -272,13 +274,18 @@ function App() {
     setSpecDetailError(null);
   }
 
-  async function askModel(question: string) {
+  async function dispatchAsk(question: string) {
+    const grounding = specDetail?.specId ?? null;
     setAnswerPending(true);
     setAnswerError(null);
+    setAnswerGrounding(grounding);
     try {
-      const result = await invoke<ModelAnswer>("ask_model", {
-        prompt: question,
-      });
+      const result = grounding
+        ? await invoke<ModelAnswer>("ask_spec", {
+            specId: grounding,
+            question,
+          })
+        : await invoke<ModelAnswer>("ask_model", { prompt: question });
       setAnswer(result);
     } catch (error) {
       setAnswerError(formatModelError(error));
@@ -314,7 +321,7 @@ function App() {
 
         const question = handledAskQuestion(commandRoute);
         if (question) {
-          void askModel(question);
+          void dispatchAsk(question);
         }
 
         const targetId = routeTargetElementId(commandRoute.target);
@@ -524,6 +531,11 @@ function App() {
             <article className="doc-answer">
               <p className="doc-answer__prompt doc-prose--mono">
                 {answer.prompt}
+                {answerGrounding ? (
+                  <span className="doc-answer__grounding">
+                    {answerGrounding}
+                  </span>
+                ) : null}
               </p>
               <p className="doc-prose">{answer.answer}</p>
             </article>
