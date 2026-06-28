@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   appendCommandRouteLogEntry,
+  formatActiveArtifact,
   formatApprovalState,
   formatCommandError,
   formatCommandArgument,
@@ -232,6 +233,11 @@ function App() {
     }
   }
 
+  function clearActiveArtifact() {
+    setSpecDetail(null);
+    setSpecDetailError(null);
+  }
+
   async function submitCommand(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -338,7 +344,13 @@ function App() {
               </p>
               <ol className="doc-specs" aria-label="Specs index">
                 {specsIndex.specs.map((spec) => (
-                  <li className="doc-specs__entry" key={spec.specId}>
+                  <li
+                    className="doc-specs__entry"
+                    key={spec.specId}
+                    aria-current={
+                      specDetail?.specId === spec.specId ? "true" : undefined
+                    }
+                  >
                     <div className="doc-specs__head">
                       <span>{spec.specId}</span>
                       <em>{spec.status}</em>
@@ -557,15 +569,39 @@ function App() {
       </div>
 
       <footer className="doc-foot">
-        <span>
-          <kbd>⌘F</kbd> find
-        </span>
-        <span>
-          <kbd>e</kbd> edit
-        </span>
-        <span>
-          <kbd>esc</kbd> back
-        </span>
+        <div className="doc-foot__status" aria-live="polite">
+          <span className="doc-foot__label">artifact</span>
+          <span
+            className={
+              specDetail
+                ? "doc-foot__artifact"
+                : "doc-foot__artifact doc-foot__artifact--none"
+            }
+          >
+            {formatActiveArtifact(specDetail)}
+          </span>
+          {specDetail ? (
+            <button
+              type="button"
+              className="doc-foot__clear"
+              aria-label={`Clear active artifact ${specDetail.specId}`}
+              onClick={clearActiveArtifact}
+            >
+              clear
+            </button>
+          ) : null}
+        </div>
+        <div className="doc-foot__keys">
+          <span>
+            <kbd>⌘F</kbd> find
+          </span>
+          <span>
+            <kbd>e</kbd> edit
+          </span>
+          <span>
+            <kbd>esc</kbd> back
+          </span>
+        </div>
       </footer>
     </main>
   );

@@ -82,6 +82,14 @@ export type StaticSpecDetail = {
   limitations: string[];
 };
 
+export const NO_ACTIVE_ARTIFACT_LABEL = "No active artifact";
+
+export function formatActiveArtifact(detail: StaticSpecDetail | null) {
+  return detail
+    ? `${detail.specId} · ${detail.title}`
+    : NO_ACTIVE_ARTIFACT_LABEL;
+}
+
 export type ParsedCommandKind =
   | "navigate"
   | "ask"
