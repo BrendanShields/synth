@@ -765,6 +765,48 @@ input {
   color: var(--accent);
 }
 
+.doc-workspace__docs {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.doc-workspace__docs button,
+.doc-reader__close {
+  padding: 3px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.doc-workspace__docs button:hover,
+.doc-reader__close:hover {
+  color: var(--ink);
+  border-color: var(--ink-faint);
+}
+
+.doc-reader {
+  margin: 0 0 16px;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 18px 20px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.015);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+
 @media (max-width: 920px) {
   .doc-nav {
     display: none;
