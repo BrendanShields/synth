@@ -756,6 +756,15 @@ input {
   color: #9a5036;
 }
 
+.doc-workspace__baseline {
+  margin: 8px 0 0;
+  color: var(--ink-faint);
+}
+
+.doc-workspace__baseline[data-complete="true"] {
+  color: var(--accent);
+}
+
 @media (max-width: 920px) {
   .doc-nav {
     display: none;

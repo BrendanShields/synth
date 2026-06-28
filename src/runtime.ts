@@ -128,6 +128,25 @@ export function formatModelError(error: unknown) {
   return "The model is unavailable.";
 }
 
+export type PlanningBaseline = {
+  prdPresent: boolean;
+  erdPresent: boolean;
+  complete: boolean;
+};
+
+export function formatPlanningBaseline(baseline: PlanningBaseline) {
+  if (baseline.complete) {
+    return "planning baseline complete";
+  }
+  const missing = [
+    baseline.prdPresent ? null : "PRD",
+    baseline.erdPresent ? null : "ERD",
+  ]
+    .filter(Boolean)
+    .join(", ");
+  return `planning baseline incomplete — missing ${missing}`;
+}
+
 export type SessionEventKind = "command" | "answer" | "error";
 
 export type SessionEvent = {
