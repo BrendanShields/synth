@@ -159,6 +159,23 @@ pub fn create_branch(root: &Path, name: &str) -> Result<(), String> {
     }
 }
 
+pub fn switch_branch(root: &Path, name: &str) -> Result<(), String> {
+    let output = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["switch", name])
+        .output()
+        .map_err(|error| format!("Could not run git: {error}"))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "git switch failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
+}
+
 pub fn commit_all(root: &Path, message: &str) -> Result<(), String> {
     let add = std::process::Command::new("git")
         .current_dir(root)
@@ -277,6 +294,34 @@ mod tests {
         assert!(String::from_utf8_lossy(&listed.stdout).contains("feature/x"));
 
         assert!(create_branch(&dir, "feature/x").is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn switch_branch_changes_current_branch_in_a_temp_repo() {
+        let dir = std::env::temp_dir().join(format!("synth-fs020-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .current_dir(&dir)
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@t"]);
+        git(&["config", "user.name", "t"]);
+        git(&["commit", "--allow-empty", "-q", "-m", "init"]);
+        git(&["branch", "feature/x"]);
+
+        assert!(switch_branch(&dir, "feature/x").is_ok());
+        let current = git(&["branch", "--show-current"]);
+        assert_eq!(String::from_utf8_lossy(&current.stdout).trim(), "feature/x");
+
+        assert!(switch_branch(&dir, "does-not-exist").is_err());
 
         let _ = std::fs::remove_dir_all(&dir);
     }

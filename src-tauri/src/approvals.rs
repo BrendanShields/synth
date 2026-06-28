@@ -28,6 +28,7 @@ pub struct ApprovalOutcome {
 enum PendingAction {
     CreateBranch(String),
     Commit(String),
+    SwitchBranch(String),
 }
 
 #[derive(Default)]
@@ -81,6 +82,19 @@ impl ApprovalInner {
             action: "commit".to_string(),
             summary: format!("Commit: {message}"),
             command: format!("git add -A && git commit -m \"{message}\""),
+        }
+    }
+
+    fn record_switch_branch(&mut self, name: &str) -> ApprovalRequest {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.pending
+            .insert(id, PendingAction::SwitchBranch(name.to_string()));
+        ApprovalRequest {
+            id,
+            action: "switch-branch".to_string(),
+            summary: format!("Switch to branch {name}"),
+            command: format!("git switch {name}"),
         }
     }
 
@@ -140,6 +154,31 @@ pub fn request_commit(
 }
 
 #[tauri::command]
+pub fn request_switch_branch(
+    approvals: tauri::State<'_, ApprovalState>,
+    workspace: tauri::State<'_, WorkspaceState>,
+    name: String,
+) -> Result<ApprovalRequest, String> {
+    if !is_valid_branch_name(&name) {
+        return Err("Invalid branch name.".to_string());
+    }
+    if workspace
+        .0
+        .lock()
+        .expect("workspace state lock poisoned")
+        .is_none()
+    {
+        return Err("No workspace is open.".to_string());
+    }
+
+    Ok(approvals
+        .0
+        .lock()
+        .expect("approval state lock poisoned")
+        .record_switch_branch(&name))
+}
+
+#[tauri::command]
 pub fn resolve_approval(
     approvals: tauri::State<'_, ApprovalState>,
     workspace: tauri::State<'_, WorkspaceState>,
@@ -181,6 +220,14 @@ pub fn resolve_approval(
                 id,
                 approved: true,
                 message: "Committed changes.".to_string(),
+            })
+        }
+        PendingAction::SwitchBranch(name) => {
+            git::switch_branch(Path::new(&root), &name)?;
+            Ok(ApprovalOutcome {
+                id,
+                approved: true,
+                message: format!("Switched to branch {name}."),
             })
         }
     }
@@ -236,6 +283,19 @@ mod tests {
         assert_eq!(
             inner.take(request.id),
             Some(PendingAction::Commit("docs: update".to_string()))
+        );
+    }
+
+    #[test]
+    fn records_switch_action_with_exact_command() {
+        let mut inner = ApprovalInner::default();
+        let request = inner.record_switch_branch("feature/x");
+
+        assert_eq!(request.action, "switch-branch");
+        assert_eq!(request.command, "git switch feature/x");
+        assert_eq!(
+            inner.take(request.id),
+            Some(PendingAction::SwitchBranch("feature/x".to_string()))
         );
     }
 
