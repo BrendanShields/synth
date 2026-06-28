@@ -30,6 +30,7 @@ enum PendingAction {
     Commit(String),
     SwitchBranch(String),
     Push(String),
+    CreatePr { title: String, body: String },
 }
 
 #[derive(Default)]
@@ -69,6 +70,20 @@ pub fn is_valid_remote_name(remote: &str) -> bool {
     remote
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+}
+
+pub fn is_valid_pr_title(title: &str) -> bool {
+    !title.trim().is_empty() && title.len() <= 200
+}
+
+fn truncate_for_display(text: &str) -> String {
+    let oneline = text.replace('\n', " ");
+    if oneline.chars().count() <= 60 {
+        oneline
+    } else {
+        let head: String = oneline.chars().take(60).collect();
+        format!("{head}…")
+    }
 }
 
 impl ApprovalInner {
@@ -121,6 +136,27 @@ impl ApprovalInner {
             action: "push".to_string(),
             summary: format!("Push current branch to {remote}"),
             command: format!("git push -u {remote} HEAD"),
+        }
+    }
+
+    fn record_create_pr(&mut self, title: &str, body: &str) -> ApprovalRequest {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.pending.insert(
+            id,
+            PendingAction::CreatePr {
+                title: title.to_string(),
+                body: body.to_string(),
+            },
+        );
+        ApprovalRequest {
+            id,
+            action: "create-pr".to_string(),
+            summary: format!("Open pull request: {title}"),
+            command: format!(
+                "gh pr create --title \"{title}\" --body \"{}\"",
+                truncate_for_display(body)
+            ),
         }
     }
 
@@ -238,6 +274,35 @@ pub fn request_push(
 }
 
 #[tauri::command]
+pub fn request_create_pr(
+    approvals: tauri::State<'_, ApprovalState>,
+    workspace: tauri::State<'_, WorkspaceState>,
+    title: String,
+    body: String,
+) -> Result<ApprovalRequest, String> {
+    if !is_valid_pr_title(&title) {
+        return Err("Invalid pull request title.".to_string());
+    }
+    if body.len() > 50_000 {
+        return Err("Pull request body is too long.".to_string());
+    }
+    if workspace
+        .0
+        .lock()
+        .expect("workspace state lock poisoned")
+        .is_none()
+    {
+        return Err("No workspace is open.".to_string());
+    }
+
+    Ok(approvals
+        .0
+        .lock()
+        .expect("approval state lock poisoned")
+        .record_create_pr(&title, &body))
+}
+
+#[tauri::command]
 pub fn resolve_approval(
     approvals: tauri::State<'_, ApprovalState>,
     workspace: tauri::State<'_, WorkspaceState>,
@@ -295,6 +360,18 @@ pub fn resolve_approval(
                 id,
                 approved: true,
                 message: format!("Pushed to {remote}."),
+            })
+        }
+        PendingAction::CreatePr { title, body } => {
+            let url = git::create_pr(Path::new(&root), &title, &body)?;
+            Ok(ApprovalOutcome {
+                id,
+                approved: true,
+                message: if url.is_empty() {
+                    "Pull request created.".to_string()
+                } else {
+                    url
+                },
             })
         }
     }
@@ -386,6 +463,33 @@ mod tests {
         assert_eq!(
             inner.take(request.id),
             Some(PendingAction::Push("origin".to_string()))
+        );
+    }
+
+    #[test]
+    fn validates_pr_titles() {
+        assert!(is_valid_pr_title("Add feature"));
+        assert!(!is_valid_pr_title(""));
+        assert!(!is_valid_pr_title("   "));
+        assert!(!is_valid_pr_title(&"x".repeat(201)));
+    }
+
+    #[test]
+    fn records_pr_action_capturing_title_and_body_with_truncated_display() {
+        let mut inner = ApprovalInner::default();
+        let body = "line one\n".to_string() + &"y".repeat(100);
+        let request = inner.record_create_pr("Add feature", &body);
+
+        assert_eq!(request.action, "create-pr");
+        assert!(request.command.starts_with("gh pr create --title \"Add feature\""));
+        assert!(request.command.contains('…'));
+        assert!(!request.command.contains('\n'));
+        assert_eq!(
+            inner.take(request.id),
+            Some(PendingAction::CreatePr {
+                title: "Add feature".to_string(),
+                body,
+            })
         );
     }
 
