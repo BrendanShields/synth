@@ -104,8 +104,15 @@
     },
     {
       "id": "FS-026",
-      "title": "Autonomy mode",
-      "planned": true
+      "title": "Autonomy mode"
+    },
+    {
+      "id": "FS-027",
+      "title": "Read-only diff review"
+    },
+    {
+      "id": "FS-028",
+      "title": "Configurable provider settings"
     }
   ]
 }
