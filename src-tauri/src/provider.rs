@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use crate::specs_index::StaticSpecDetail;
+
 const OLLAMA_BASE_URL: &str = "http://localhost:11434";
 const OLLAMA_MODEL: &str = "gemma4:e4b";
 
@@ -109,14 +111,25 @@ pub fn parse_generate_answer(body: &str) -> Result<String, String> {
         .ok_or_else(|| "response did not contain an answer".to_string())
 }
 
-#[tauri::command]
-pub async fn ask_model(prompt: String) -> Result<ModelAnswer, String> {
-    let trimmed = prompt.trim();
-    if trimmed.is_empty() {
-        return Err("Ask needs a question after ?.".to_string());
-    }
+pub fn build_spec_prompt(detail: &StaticSpecDetail, question: &str) -> String {
+    format!(
+        "You are answering a question about a software feature spec. Use only the context below.\n\n\
+         Spec: {id} — {title}\n\
+         Summary: {summary}\n\
+         Scope: {scope}\n\
+         Limitations: {limitations}\n\n\
+         Question: {question}\n\n\
+         Answer concisely using only that context.",
+        id = detail.spec_id,
+        title = detail.title,
+        summary = detail.summary,
+        scope = detail.scope.join("; "),
+        limitations = detail.limitations.join("; "),
+        question = question,
+    )
+}
 
-    let config = default_provider_config();
+async fn generate(config: &ProviderConfig, prompt: &str) -> Result<String, String> {
     let endpoint = format!("{}/api/generate", config.base_url);
 
     let client = reqwest::Client::builder()
@@ -126,7 +139,7 @@ pub async fn ask_model(prompt: String) -> Result<ModelAnswer, String> {
 
     let response = client
         .post(&endpoint)
-        .json(&build_generate_body(&config, trimmed))
+        .json(&build_generate_body(config, prompt))
         .send()
         .await
         .map_err(|_| "Ollama is not reachable at the configured endpoint.".to_string())?;
@@ -140,10 +153,41 @@ pub async fn ask_model(prompt: String) -> Result<ModelAnswer, String> {
         .await
         .map_err(|error| format!("read error: {error}"))?;
 
+    parse_generate_answer(&body)
+}
+
+#[tauri::command]
+pub async fn ask_model(prompt: String) -> Result<ModelAnswer, String> {
+    let trimmed = prompt.trim();
+    if trimmed.is_empty() {
+        return Err("Ask needs a question after ?.".to_string());
+    }
+
+    let config = default_provider_config();
+    let answer = generate(&config, trimmed).await?;
+
     Ok(ModelAnswer {
         model: config.model,
         prompt: trimmed.to_string(),
-        answer: parse_generate_answer(&body)?,
+        answer,
+    })
+}
+
+#[tauri::command]
+pub async fn ask_spec(spec_id: String, question: String) -> Result<ModelAnswer, String> {
+    let trimmed = question.trim();
+    if trimmed.is_empty() {
+        return Err("Ask needs a question after ?.".to_string());
+    }
+
+    let detail = crate::specs_index::lookup_static_spec_detail(&spec_id)?;
+    let config = default_provider_config();
+    let answer = generate(&config, &build_spec_prompt(&detail, trimmed)).await?;
+
+    Ok(ModelAnswer {
+        model: config.model,
+        prompt: trimmed.to_string(),
+        answer,
     })
 }
 
@@ -266,6 +310,17 @@ mod tests {
     fn generate_answer_errors_on_malformed_or_missing_response() {
         assert!(parse_generate_answer("not json").is_err());
         assert!(parse_generate_answer(r#"{"done":true}"#).is_err());
+    }
+
+    #[test]
+    fn build_spec_prompt_grounds_in_spec_context_and_question() {
+        let detail = crate::specs_index::lookup_static_spec_detail("FS-005").unwrap();
+        let prompt = build_spec_prompt(&detail, "what does this add?");
+
+        assert!(prompt.contains("FS-005"));
+        assert!(prompt.contains(&detail.title));
+        assert!(prompt.contains(&detail.summary));
+        assert!(prompt.contains("what does this add?"));
     }
 
     #[test]
