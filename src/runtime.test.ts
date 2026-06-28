@@ -9,6 +9,7 @@ import {
   formatCommandError,
   formatCommandArgument,
   formatLabel,
+  formatProviderState,
   formatRuntimeError,
   formatSpecDetailError,
   formatSpecsIndexError,
@@ -20,6 +21,7 @@ import {
   shouldSubmitCommandInput,
   type CommandRoute,
   type ParsedCommand,
+  type ProviderStatus,
   type SpecsIndex,
   type StaticSpecDetail,
 } from "./runtime";
@@ -229,6 +231,38 @@ describe("active artifact", () => {
   it("uses the neutral label when no artifact is active", () => {
     expect(formatActiveArtifact(null)).toBe(NO_ACTIVE_ARTIFACT_LABEL);
     expect(NO_ACTIVE_ARTIFACT_LABEL).toBe("No active artifact");
+  });
+});
+
+describe("formatProviderState", () => {
+  const base: ProviderStatus = {
+    kind: "ollama",
+    baseUrl: "http://localhost:11434",
+    model: "gemma4:e4b",
+    state: "reachable",
+    modelPresent: true,
+    availableModels: ["gemma4:e4b"],
+    detail: "",
+  };
+
+  it("is connecting before a status arrives", () => {
+    expect(formatProviderState(null)).toBe("connecting");
+  });
+
+  it("is ready when reachable with the model present", () => {
+    expect(formatProviderState(base)).toBe("ready");
+  });
+
+  it("flags a reachable provider missing the model", () => {
+    expect(formatProviderState({ ...base, modelPresent: false })).toBe(
+      "model missing",
+    );
+  });
+
+  it("is offline when unreachable", () => {
+    expect(
+      formatProviderState({ ...base, state: "unreachable", modelPresent: false }),
+    ).toBe("offline");
   });
 });
 

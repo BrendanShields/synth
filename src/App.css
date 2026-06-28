@@ -672,6 +672,11 @@ input {
   padding-left: 14px;
 }
 
+.doc-provider {
+  margin: 16px 0 0;
+  color: var(--ink-faint);
+}
+
 @media (max-width: 920px) {
   .doc-nav {
     display: none;
