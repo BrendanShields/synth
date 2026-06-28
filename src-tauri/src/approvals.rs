@@ -27,6 +27,7 @@ pub struct ApprovalOutcome {
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum PendingAction {
     CreateBranch(String),
+    Commit(String),
 }
 
 #[derive(Default)]
@@ -52,6 +53,10 @@ pub fn is_valid_branch_name(name: &str) -> bool {
         .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '/' | '-'))
 }
 
+pub fn is_valid_commit_message(message: &str) -> bool {
+    !message.trim().is_empty() && message.len() <= 2000
+}
+
 impl ApprovalInner {
     fn record_branch(&mut self, name: &str) -> ApprovalRequest {
         let id = self.next_id;
@@ -63,6 +68,19 @@ impl ApprovalInner {
             action: "create-branch".to_string(),
             summary: format!("Create branch {name}"),
             command: format!("git branch {name}"),
+        }
+    }
+
+    fn record_commit(&mut self, message: &str) -> ApprovalRequest {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.pending
+            .insert(id, PendingAction::Commit(message.to_string()));
+        ApprovalRequest {
+            id,
+            action: "commit".to_string(),
+            summary: format!("Commit: {message}"),
+            command: format!("git add -A && git commit -m \"{message}\""),
         }
     }
 
@@ -94,6 +112,31 @@ pub fn request_create_branch(
         .lock()
         .expect("approval state lock poisoned")
         .record_branch(&name))
+}
+
+#[tauri::command]
+pub fn request_commit(
+    approvals: tauri::State<'_, ApprovalState>,
+    workspace: tauri::State<'_, WorkspaceState>,
+    message: String,
+) -> Result<ApprovalRequest, String> {
+    if !is_valid_commit_message(&message) {
+        return Err("Invalid commit message.".to_string());
+    }
+    if workspace
+        .0
+        .lock()
+        .expect("workspace state lock poisoned")
+        .is_none()
+    {
+        return Err("No workspace is open.".to_string());
+    }
+
+    Ok(approvals
+        .0
+        .lock()
+        .expect("approval state lock poisoned")
+        .record_commit(&message))
 }
 
 #[tauri::command]
@@ -132,6 +175,14 @@ pub fn resolve_approval(
                 message: format!("Created branch {name}."),
             })
         }
+        PendingAction::Commit(message) => {
+            git::commit_all(Path::new(&root), &message)?;
+            Ok(ApprovalOutcome {
+                id,
+                approved: true,
+                message: "Committed changes.".to_string(),
+            })
+        }
     }
 }
 
@@ -162,6 +213,30 @@ mod tests {
         assert_eq!(request.action, "create-branch");
         assert_eq!(request.command, "git branch feature/x");
         assert_eq!(inner.pending.len(), 1);
+    }
+
+    #[test]
+    fn validates_commit_messages() {
+        assert!(is_valid_commit_message("docs: update"));
+        assert!(!is_valid_commit_message(""));
+        assert!(!is_valid_commit_message("   \n"));
+        assert!(!is_valid_commit_message(&"x".repeat(2001)));
+    }
+
+    #[test]
+    fn records_commit_action_with_exact_effect() {
+        let mut inner = ApprovalInner::default();
+        let request = inner.record_commit("docs: update");
+
+        assert_eq!(request.action, "commit");
+        assert_eq!(
+            request.command,
+            "git add -A && git commit -m \"docs: update\""
+        );
+        assert_eq!(
+            inner.take(request.id),
+            Some(PendingAction::Commit("docs: update".to_string()))
+        );
     }
 
     #[test]
