@@ -68,7 +68,19 @@
     },
     {
       "id": "FS-017",
-      "title": "Read-only git log",
+      "title": "Read-only git log"
+    },
+    {
+      "id": "FS-018",
+      "title": "Approval-gated branch creation"
+    },
+    {
+      "id": "FS-019",
+      "title": "Approval-gated commit"
+    },
+    {
+      "id": "FS-020",
+      "title": "Approval-gated branch switch",
       "planned": true
     }
   ]
