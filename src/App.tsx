@@ -7,6 +7,7 @@ import {
   appendSessionEvent,
   formatActiveArtifact,
   formatApprovalState,
+  formatClassificationGate,
   formatCommandError,
   formatCommandArgument,
   formatGitStatus,
@@ -20,6 +21,7 @@ import {
   formatSpecsIndexError,
   formatSpecsIndexSource,
   handledAskQuestion,
+  handledClassificationRequest,
   handledSpecDetailId,
   lineSpreadOffset,
   routeTargetElementId,
@@ -29,6 +31,7 @@ import {
   type GitStatus,
   type PlanningBaseline,
   type ProviderStatus,
+  type RequestClassification,
   type SessionEvent,
   type SessionEventKind,
   type SpecsIndex,
@@ -126,6 +129,8 @@ function App() {
   const [answerPending, setAnswerPending] = useState(false);
   const [answerError, setAnswerError] = useState<string | null>(null);
   const [answerGrounding, setAnswerGrounding] = useState<string | null>(null);
+  const [classification, setClassification] =
+    useState<RequestClassification | null>(null);
   const requestCounter = useRef(0);
   const currentRequest = useRef(0);
   const currentAsk = useRef<{ prompt: string; grounding: string | null } | null>(
@@ -532,7 +537,7 @@ function App() {
     }
 
     const SELECTOR =
-      ".doc-head h1, .doc-lede, .doc-prose, .doc-section h2, .doc-status__row, .doc-specs__entry, .doc-detail, .doc-answer, .doc-quote, .doc-error";
+      ".doc-head h1, .doc-lede, .doc-prose, .doc-section h2, .doc-status__row, .doc-specs__entry, .doc-detail, .doc-answer, .doc-classification, .doc-quote, .doc-error";
 
     let frame = 0;
 
@@ -579,6 +584,7 @@ function App() {
     answerPending,
     answerError,
     answerGrounding,
+    classification,
     sessionEvents,
   ]);
 
@@ -658,6 +664,15 @@ function App() {
           void dispatchAsk(question);
         }
 
+        const request = handledClassificationRequest(commandRoute);
+        if (request) {
+          void invoke<RequestClassification>("classify_request", {
+            input: request,
+          })
+            .then((result) => setClassification(result))
+            .catch(() => setClassification(null));
+        }
+
         const targetId = routeTargetElementId(commandRoute.target);
         const target = targetId ? document.getElementById(targetId) : null;
 
@@ -701,6 +716,9 @@ function App() {
           </a>
           <a className="doc-nav__link" href="#answer">
             Answer
+          </a>
+          <a className="doc-nav__link" href="#classification">
+            Classification
           </a>
           <a className="doc-nav__link" href="#event-stream">
             Event stream
@@ -1067,6 +1085,22 @@ function App() {
           ) : (
             <p className="doc-prose doc-prose--muted" role="status">
               Ask with ? followed by a question.
+            </p>
+          )}
+        </section>
+
+        <section className="doc-section" id="classification">
+          <h2>Classification</h2>
+          {classification ? (
+            <div className="doc-classification" data-kind={classification.kind}>
+              <p className="doc-classification__head doc-prose--mono">
+                {classification.kind} · {formatClassificationGate(classification)}
+              </p>
+              <p className="doc-prose">{classification.rationale}</p>
+            </div>
+          ) : (
+            <p className="doc-prose doc-prose--muted" role="status">
+              Type a request to see how Synth would treat it.
             </p>
           )}
         </section>

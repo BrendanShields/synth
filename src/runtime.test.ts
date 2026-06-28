@@ -5,6 +5,7 @@ import {
   appendCommandRouteLogEntry,
   appendParsedCommandLogEntry,
   appendSessionEvent,
+  formatClassificationGate,
   formatGitStatus,
   formatPlanningBaseline,
   formatSessionEvent,
@@ -239,6 +240,35 @@ describe("active artifact", () => {
   it("uses the neutral label when no artifact is active", () => {
     expect(formatActiveArtifact(null)).toBe(NO_ACTIVE_ARTIFACT_LABEL);
     expect(NO_ACTIVE_ARTIFACT_LABEL).toBe("No active artifact");
+  });
+});
+
+describe("formatClassificationGate", () => {
+  it("reports the strictest applicable gate", () => {
+    expect(
+      formatClassificationGate({
+        kind: "project",
+        specRequired: true,
+        baselineRequired: true,
+        rationale: "",
+      }),
+    ).toBe("planning baseline required");
+    expect(
+      formatClassificationGate({
+        kind: "component",
+        specRequired: true,
+        baselineRequired: false,
+        rationale: "",
+      }),
+    ).toBe("feature spec required");
+    expect(
+      formatClassificationGate({
+        kind: "question",
+        specRequired: false,
+        baselineRequired: false,
+        rationale: "",
+      }),
+    ).toBe("no spec required");
   });
 });
 

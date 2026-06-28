@@ -215,10 +215,28 @@ export type RouteTarget =
   | "specs"
   | "spec-detail"
   | "answer"
+  | "classification"
   | "runtime-status"
   | "event-stream"
   | "phase"
   | "none";
+
+export type RequestClassification = {
+  kind: "question" | "component" | "project";
+  specRequired: boolean;
+  baselineRequired: boolean;
+  rationale: string;
+};
+
+export function formatClassificationGate(c: RequestClassification) {
+  if (c.baselineRequired) {
+    return "planning baseline required";
+  }
+  if (c.specRequired) {
+    return "feature spec required";
+  }
+  return "no spec required";
+}
 
 export type CommandRoute = {
   parsed: ParsedCommand;
@@ -276,6 +294,12 @@ export function handledSpecDetailId(route: CommandRoute) {
 
 export function handledAskQuestion(route: CommandRoute) {
   return route.disposition === "handled" && route.target === "answer"
+    ? route.parsed.argument
+    : null;
+}
+
+export function handledClassificationRequest(route: CommandRoute) {
+  return route.disposition === "handled" && route.target === "classification"
     ? route.parsed.argument
     : null;
 }

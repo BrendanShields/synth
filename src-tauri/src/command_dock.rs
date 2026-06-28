@@ -51,6 +51,7 @@ pub enum RouteTarget {
     Specs,
     SpecDetail,
     Answer,
+    Classification,
     RuntimeStatus,
     EventStream,
     Phase,
@@ -157,11 +158,21 @@ pub fn route_raw_command(input: &str) -> CommandRoute {
             parsed,
             "Steer routes are not available yet; active-turn steering arrives in a later spec.",
         ),
-        CommandKind::Natural => unsupported_route(
-            parsed,
-            "Natural-language routes are not available yet; request handling arrives in a later spec.",
-        ),
+        CommandKind::Natural => route_natural(parsed),
     }
+}
+
+fn route_natural(parsed: ParsedCommand) -> CommandRoute {
+    if parsed.argument.trim().is_empty() {
+        return unsupported_route(parsed, "Empty request; nothing to classify.");
+    }
+
+    route(
+        parsed,
+        RouteDisposition::Handled,
+        RouteTarget::Classification,
+        "Handled natural-language request; classifying it.",
+    )
 }
 
 fn route_navigation(parsed: ParsedCommand) -> CommandRoute {
@@ -460,7 +471,6 @@ mod tests {
             ("@docs/PRD.md", CommandKind::Reference),
             ("#FS-003", CommandKind::Tag),
             ("> stop", CommandKind::Steer),
-            ("add a workspace opener", CommandKind::Natural),
         ];
 
         for (input, expected_kind) in cases {
@@ -573,6 +583,16 @@ mod tests {
         assert_eq!(route.parsed.argument, "what is 2 + 2?");
         assert_eq!(route.disposition, RouteDisposition::Handled);
         assert_eq!(route.target, RouteTarget::Answer);
+    }
+
+    #[test]
+    fn routes_natural_language_to_classification() {
+        let route = route_raw_command("add a loading state to the dock");
+
+        assert_eq!(route.parsed.kind, CommandKind::Natural);
+        assert_eq!(route.parsed.argument, "add a loading state to the dock");
+        assert_eq!(route.disposition, RouteDisposition::Handled);
+        assert_eq!(route.target, RouteTarget::Classification);
     }
 
     #[test]
