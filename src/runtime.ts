@@ -110,6 +110,24 @@ export function formatProviderState(status: ProviderStatus | null) {
   return status.modelPresent ? "ready" : "model missing";
 }
 
+export type ModelAnswer = {
+  model: string;
+  prompt: string;
+  answer: string;
+};
+
+export function formatModelError(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return "The model is unavailable.";
+}
+
 export type ParsedCommandKind =
   | "navigate"
   | "ask"
@@ -135,6 +153,7 @@ export type RouteTarget =
   | "summary"
   | "specs"
   | "spec-detail"
+  | "answer"
   | "runtime-status"
   | "event-stream"
   | "phase"
@@ -191,6 +210,12 @@ export function handledSpecDetailId(route: CommandRoute) {
     route.target === "spec-detail" &&
     route.resource
     ? route.resource
+    : null;
+}
+
+export function handledAskQuestion(route: CommandRoute) {
+  return route.disposition === "handled" && route.target === "answer"
+    ? route.parsed.argument
     : null;
 }
 

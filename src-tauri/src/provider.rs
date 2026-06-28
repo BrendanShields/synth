@@ -23,6 +23,14 @@ pub struct ProviderStatus {
     pub detail: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelAnswer {
+    pub model: String,
+    pub prompt: String,
+    pub answer: String,
+}
+
 pub fn default_provider_config() -> ProviderConfig {
     ProviderConfig {
         kind: "ollama".to_string(),
@@ -81,6 +89,62 @@ fn unreachable_status(config: ProviderConfig, detail: String) -> ProviderStatus 
         available_models: Vec::new(),
         detail,
     }
+}
+
+pub fn build_generate_body(config: &ProviderConfig, prompt: &str) -> serde_json::Value {
+    serde_json::json!({
+        "model": config.model,
+        "prompt": prompt,
+        "stream": false,
+    })
+}
+
+pub fn parse_generate_answer(body: &str) -> Result<String, String> {
+    let parsed: serde_json::Value =
+        serde_json::from_str(body).map_err(|error| format!("invalid response: {error}"))?;
+
+    parsed["response"]
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| "response did not contain an answer".to_string())
+}
+
+#[tauri::command]
+pub async fn ask_model(prompt: String) -> Result<ModelAnswer, String> {
+    let trimmed = prompt.trim();
+    if trimmed.is_empty() {
+        return Err("Ask needs a question after ?.".to_string());
+    }
+
+    let config = default_provider_config();
+    let endpoint = format!("{}/api/generate", config.base_url);
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|error| format!("client error: {error}"))?;
+
+    let response = client
+        .post(&endpoint)
+        .json(&build_generate_body(&config, trimmed))
+        .send()
+        .await
+        .map_err(|_| "Ollama is not reachable at the configured endpoint.".to_string())?;
+
+    if !response.status().is_success() {
+        return Err(format!("Ollama returned status {}.", response.status()));
+    }
+
+    let body = response
+        .text()
+        .await
+        .map_err(|error| format!("read error: {error}"))?;
+
+    Ok(ModelAnswer {
+        model: config.model,
+        prompt: trimmed.to_string(),
+        answer: parse_generate_answer(&body)?,
+    })
 }
 
 #[tauri::command]
@@ -180,5 +244,41 @@ mod tests {
         assert_eq!(serialized["baseUrl"], "http://localhost:11434");
         assert_eq!(serialized["modelPresent"], true);
         assert!(serialized["availableModels"].is_array());
+    }
+
+    #[test]
+    fn build_generate_body_requests_the_configured_model_without_streaming() {
+        let body = build_generate_body(&default_provider_config(), "hello");
+
+        assert_eq!(body["model"], "gemma4:e4b");
+        assert_eq!(body["prompt"], "hello");
+        assert_eq!(body["stream"], false);
+    }
+
+    #[test]
+    fn parses_answer_from_generate_response() {
+        let body = r#"{"model":"gemma4:e4b","response":"4","done":true}"#;
+
+        assert_eq!(parse_generate_answer(body).unwrap(), "4");
+    }
+
+    #[test]
+    fn generate_answer_errors_on_malformed_or_missing_response() {
+        assert!(parse_generate_answer("not json").is_err());
+        assert!(parse_generate_answer(r#"{"done":true}"#).is_err());
+    }
+
+    #[test]
+    fn serializes_model_answer_in_camel_case() {
+        let serialized = serde_json::to_value(ModelAnswer {
+            model: "gemma4:e4b".to_string(),
+            prompt: "q".to_string(),
+            answer: "a".to_string(),
+        })
+        .unwrap();
+
+        assert_eq!(serialized["model"], "gemma4:e4b");
+        assert_eq!(serialized["prompt"], "q");
+        assert_eq!(serialized["answer"], "a");
     }
 }

@@ -8,17 +8,20 @@ import {
   formatCommandError,
   formatCommandArgument,
   formatLabel,
+  formatModelError,
   formatProviderState,
   formatRuntimeError,
   formatSpecDetailError,
   formatSpecsIndexError,
   formatSpecsIndexSource,
+  handledAskQuestion,
   handledSpecDetailId,
   lineSpreadOffset,
   routeTargetElementId,
   isHandledRoute,
   shouldSubmitCommandInput,
   type CommandRoute,
+  type ModelAnswer,
   type ProviderStatus,
   type SpecsIndex,
   type StaticSpecDetail,
@@ -76,6 +79,9 @@ function App() {
   const [providerStatus, setProviderStatus] = useState<ProviderStatus | null>(
     null,
   );
+  const [answer, setAnswer] = useState<ModelAnswer | null>(null);
+  const [answerPending, setAnswerPending] = useState(false);
+  const [answerError, setAnswerError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -202,7 +208,7 @@ function App() {
     }
 
     const SELECTOR =
-      ".doc-head h1, .doc-lede, .doc-prose, .doc-section h2, .doc-status__row, .doc-specs__entry, .doc-detail, .doc-quote, .doc-error";
+      ".doc-head h1, .doc-lede, .doc-prose, .doc-section h2, .doc-status__row, .doc-specs__entry, .doc-detail, .doc-answer, .doc-quote, .doc-error";
 
     let frame = 0;
 
@@ -244,6 +250,9 @@ function App() {
     specsIndexError,
     specDetail,
     specDetailError,
+    answer,
+    answerPending,
+    answerError,
   ]);
 
   async function selectSpecDetail(specId: string) {
@@ -261,6 +270,21 @@ function App() {
   function clearActiveArtifact() {
     setSpecDetail(null);
     setSpecDetailError(null);
+  }
+
+  async function askModel(question: string) {
+    setAnswerPending(true);
+    setAnswerError(null);
+    try {
+      const result = await invoke<ModelAnswer>("ask_model", {
+        prompt: question,
+      });
+      setAnswer(result);
+    } catch (error) {
+      setAnswerError(formatModelError(error));
+    } finally {
+      setAnswerPending(false);
+    }
   }
 
   async function submitCommand(event: FormEvent<HTMLFormElement>) {
@@ -286,6 +310,11 @@ function App() {
         const specId = handledSpecDetailId(commandRoute);
         if (specId) {
           await selectSpecDetail(specId);
+        }
+
+        const question = handledAskQuestion(commandRoute);
+        if (question) {
+          void askModel(question);
         }
 
         const targetId = routeTargetElementId(commandRoute.target);
@@ -328,6 +357,9 @@ function App() {
           </a>
           <a className="doc-nav__link" href="#spec-detail">
             Spec detail
+          </a>
+          <a className="doc-nav__link" href="#answer">
+            Answer
           </a>
           <a className="doc-nav__link" href="#event-stream">
             Event stream
@@ -475,6 +507,31 @@ function App() {
               static detail.
             </p>
           ) : null}
+        </section>
+
+        <section className="doc-section" id="answer">
+          <h2>Answer</h2>
+          {answerError ? (
+            <div className="doc-error" role="status">
+              <strong>Model unavailable</strong>
+              <span>{answerError}</span>
+            </div>
+          ) : answerPending ? (
+            <p className="doc-prose doc-prose--muted" role="status">
+              Thinking…
+            </p>
+          ) : answer ? (
+            <article className="doc-answer">
+              <p className="doc-answer__prompt doc-prose--mono">
+                {answer.prompt}
+              </p>
+              <p className="doc-prose">{answer.answer}</p>
+            </article>
+          ) : (
+            <p className="doc-prose doc-prose--muted" role="status">
+              Ask with ? followed by a question.
+            </p>
+          )}
         </section>
 
         <section className="doc-section" id="runtime-status">
