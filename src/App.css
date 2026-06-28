@@ -717,6 +717,45 @@ input {
   color: #9a5036;
 }
 
+.doc-workspace {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-top: 20px;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+}
+
+.doc-workspace__name {
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-workspace__open {
+  flex: none;
+  padding: 3px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.doc-workspace__open:hover {
+  color: var(--ink);
+  border-color: var(--ink-faint);
+}
+
+.doc-workspace__error {
+  color: #9a5036;
+}
+
 @media (max-width: 920px) {
   .doc-nav {
     display: none;
