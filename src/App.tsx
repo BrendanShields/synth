@@ -142,6 +142,7 @@ function App() {
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [gitLog, setGitLog] = useState<GitCommit[]>([]);
   const [branchName, setBranchName] = useState("");
+  const [commitMessage, setCommitMessage] = useState("");
   const [pendingApproval, setPendingApproval] =
     useState<ApprovalRequest | null>(null);
   const [approvalNotice, setApprovalNotice] = useState<string | null>(null);
@@ -165,6 +166,25 @@ function App() {
     }
   }
 
+  async function requestCommit() {
+    const message = commitMessage.trim();
+    if (!message) {
+      return;
+    }
+    try {
+      const request = await invoke<ApprovalRequest>("request_commit", {
+        message,
+      });
+      setPendingApproval(request);
+      setApprovalNotice(null);
+      recordEvent("command", "approval", `requested ${request.action}`);
+    } catch (error) {
+      setApprovalNotice(
+        error instanceof Error ? error.message : "Could not request commit.",
+      );
+    }
+  }
+
   async function resolveApproval(approved: boolean) {
     if (!pendingApproval) {
       return;
@@ -184,6 +204,7 @@ function App() {
       );
       if (approved) {
         setBranchName("");
+        setCommitMessage("");
         void refreshBaseline();
       }
     } catch (error) {
@@ -685,6 +706,21 @@ function App() {
               />
               <button type="button" onClick={requestBranch}>
                 Create branch
+              </button>
+            </div>
+          ) : null}
+          {workspace && gitStatus?.isRepo ? (
+            <div className="doc-workspace__branch">
+              <input
+                aria-label="Commit message"
+                placeholder="commit message"
+                value={commitMessage}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => setCommitMessage(event.target.value)}
+              />
+              <button type="button" onClick={requestCommit}>
+                Commit
               </button>
             </div>
           ) : null}
