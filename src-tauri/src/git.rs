@@ -159,6 +159,23 @@ pub fn create_branch(root: &Path, name: &str) -> Result<(), String> {
     }
 }
 
+pub fn create_pr(root: &Path, title: &str, body: &str) -> Result<String, String> {
+    let output = std::process::Command::new("gh")
+        .current_dir(root)
+        .args(["pr", "create", "--title", title, "--body", body])
+        .output()
+        .map_err(|error| format!("Could not run gh: {error}"))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        Err(format!(
+            "gh pr create failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
+}
+
 pub fn push(root: &Path, remote: &str) -> Result<(), String> {
     let output = std::process::Command::new("git")
         .current_dir(root)

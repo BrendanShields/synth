@@ -145,6 +145,8 @@ function App() {
   const [commitMessage, setCommitMessage] = useState("");
   const [switchTarget, setSwitchTarget] = useState("");
   const [pushRemote, setPushRemote] = useState("");
+  const [prTitle, setPrTitle] = useState("");
+  const [prBody, setPrBody] = useState("");
   const [pendingApproval, setPendingApproval] =
     useState<ApprovalRequest | null>(null);
   const [approvalNotice, setApprovalNotice] = useState<string | null>(null);
@@ -221,6 +223,26 @@ function App() {
     }
   }
 
+  async function requestPr() {
+    const title = prTitle.trim();
+    if (!title) {
+      return;
+    }
+    try {
+      const request = await invoke<ApprovalRequest>("request_create_pr", {
+        title,
+        body: prBody,
+      });
+      setPendingApproval(request);
+      setApprovalNotice(null);
+      recordEvent("command", "approval", `requested ${request.action}`);
+    } catch (error) {
+      setApprovalNotice(
+        error instanceof Error ? error.message : "Could not request PR.",
+      );
+    }
+  }
+
   async function resolveApproval(approved: boolean) {
     if (!pendingApproval) {
       return;
@@ -243,6 +265,8 @@ function App() {
         setCommitMessage("");
         setSwitchTarget("");
         setPushRemote("");
+        setPrTitle("");
+        setPrBody("");
         void refreshBaseline();
       }
     } catch (error) {
@@ -789,6 +813,28 @@ function App() {
               />
               <button type="button" onClick={requestPush}>
                 Push
+              </button>
+            </div>
+          ) : null}
+          {workspace && gitStatus?.isRepo ? (
+            <div className="doc-workspace__pr">
+              <input
+                aria-label="Pull request title"
+                placeholder="pull request title"
+                value={prTitle}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => setPrTitle(event.target.value)}
+              />
+              <textarea
+                aria-label="Pull request body"
+                placeholder="pull request body"
+                value={prBody}
+                rows={2}
+                onChange={(event) => setPrBody(event.target.value)}
+              />
+              <button type="button" onClick={requestPr}>
+                Open PR
               </button>
             </div>
           ) : null}

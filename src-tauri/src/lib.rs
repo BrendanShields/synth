@@ -7,8 +7,8 @@ mod specs_index;
 mod workspace;
 
 use approvals::{
-    request_commit, request_create_branch, request_push, request_switch_branch,
-    resolve_approval, ApprovalState,
+    request_commit, request_create_branch, request_create_pr, request_push,
+    request_switch_branch, resolve_approval, ApprovalState,
 };
 use command_dock::{parse_command, route_command};
 use git::{git_log, git_status};
@@ -51,6 +51,7 @@ pub fn run() {
             request_commit,
             request_switch_branch,
             request_push,
+            request_create_pr,
             resolve_approval
         ])
         .run(tauri::generate_context!())
