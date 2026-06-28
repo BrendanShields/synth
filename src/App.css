@@ -696,6 +696,27 @@ input {
   color: var(--accent);
 }
 
+.doc-events {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.doc-events__entry {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-events__entry[data-kind="error"] {
+  color: #9a5036;
+}
+
 @media (max-width: 920px) {
   .doc-nav {
     display: none;

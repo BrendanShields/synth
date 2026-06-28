@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   appendCommandRouteLogEntry,
+  appendSessionEvent,
   formatActiveArtifact,
   formatApprovalState,
   formatCommandError,
@@ -11,6 +12,7 @@ import {
   formatModelError,
   formatProviderState,
   formatRuntimeError,
+  formatSessionEvent,
   formatSpecDetailError,
   formatSpecsIndexError,
   formatSpecsIndexSource,
@@ -22,6 +24,8 @@ import {
   shouldSubmitCommandInput,
   type CommandRoute,
   type ProviderStatus,
+  type SessionEvent,
+  type SessionEventKind,
   type SpecsIndex,
   type StaticSpecDetail,
 } from "./runtime";
@@ -85,6 +89,22 @@ function App() {
   const [answerGrounding, setAnswerGrounding] = useState<string | null>(null);
   const requestCounter = useRef(0);
   const currentRequest = useRef(0);
+  const currentAsk = useRef<{ prompt: string; grounding: string | null } | null>(
+    null,
+  );
+  const [sessionEvents, setSessionEvents] = useState<SessionEvent[]>([]);
+  const eventCounter = useRef(0);
+
+  function recordEvent(
+    kind: SessionEventKind,
+    label: string,
+    detail: string,
+  ) {
+    const id = (eventCounter.current += 1);
+    setSessionEvents((events) =>
+      appendSessionEvent(events, { id, kind, label, detail }),
+    );
+  }
 
   useEffect(() => {
     let active = true;
@@ -220,6 +240,12 @@ function App() {
         if (isCurrent(event.payload.requestId)) {
           setAnswerText(event.payload.answer);
           setAnswerPending(false);
+          const grounding = currentAsk.current?.grounding ?? null;
+          recordEvent(
+            "answer",
+            grounding ? `answer (${grounding})` : "answer",
+            event.payload.answer.slice(0, 80),
+          );
         }
       },
     ).then((unlisten) => unlistens.push(unlisten));
@@ -230,6 +256,7 @@ function App() {
         if (isCurrent(event.payload.requestId)) {
           setAnswerError(event.payload.message);
           setAnswerPending(false);
+          recordEvent("error", "ask failed", event.payload.message);
         }
       },
     ).then((unlisten) => unlistens.push(unlisten));
@@ -295,6 +322,7 @@ function App() {
     answerPending,
     answerError,
     answerGrounding,
+    sessionEvents,
   ]);
 
   async function selectSpecDetail(specId: string) {
@@ -318,6 +346,7 @@ function App() {
     const grounding = specDetail?.specId ?? null;
     const id = (requestCounter.current += 1);
     currentRequest.current = id;
+    currentAsk.current = { prompt: question, grounding };
     setAnswerPrompt(question);
     setAnswerText("");
     setAnswerError(null);
@@ -354,6 +383,11 @@ function App() {
 
       setCommandRoutes((entries) =>
         appendCommandRouteLogEntry(entries, commandRoute),
+      );
+      recordEvent(
+        "command",
+        commandRoute.parsed.kind,
+        `${commandRoute.disposition} → ${commandRoute.target}`,
       );
 
       if (isHandledRoute(commandRoute)) {
@@ -619,6 +653,23 @@ function App() {
             {runtimeEvent?.eventType ?? "No runtime event yet"}
             <cite>{runtimeEvent?.eventId ?? RUNTIME_STATUS_EVENT}</cite>
           </blockquote>
+          {sessionEvents.length > 0 ? (
+            <ol className="doc-events" aria-label="Session event log">
+              {sessionEvents.map((event) => (
+                <li
+                  className="doc-events__entry"
+                  data-kind={event.kind}
+                  key={event.id}
+                >
+                  {formatSessionEvent(event)}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="doc-prose doc-prose--muted" role="status">
+              Session activity will appear here.
+            </p>
+          )}
         </section>
 
         <section className="doc-section" id="phase">

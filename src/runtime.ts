@@ -128,6 +128,29 @@ export function formatModelError(error: unknown) {
   return "The model is unavailable.";
 }
 
+export type SessionEventKind = "command" | "answer" | "error";
+
+export type SessionEvent = {
+  id: number;
+  kind: SessionEventKind;
+  label: string;
+  detail: string;
+};
+
+export const MAX_SESSION_EVENTS = 50;
+
+export function appendSessionEvent(
+  events: SessionEvent[],
+  event: SessionEvent,
+  max = MAX_SESSION_EVENTS,
+) {
+  return [event, ...events].slice(0, max);
+}
+
+export function formatSessionEvent(event: SessionEvent) {
+  return event.detail ? `${event.label} · ${event.detail}` : event.label;
+}
+
 export type ParsedCommandKind =
   | "navigate"
   | "ask"

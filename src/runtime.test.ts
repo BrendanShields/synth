@@ -4,6 +4,8 @@ import {
   NO_ACTIVE_ARTIFACT_LABEL,
   appendCommandRouteLogEntry,
   appendParsedCommandLogEntry,
+  appendSessionEvent,
+  formatSessionEvent,
   formatActiveArtifact,
   formatApprovalState,
   formatCommandError,
@@ -24,6 +26,7 @@ import {
   type CommandRoute,
   type ParsedCommand,
   type ProviderStatus,
+  type SessionEvent,
   type SpecsIndex,
   type StaticSpecDetail,
 } from "./runtime";
@@ -234,6 +237,31 @@ describe("active artifact", () => {
   it("uses the neutral label when no artifact is active", () => {
     expect(formatActiveArtifact(null)).toBe(NO_ACTIVE_ARTIFACT_LABEL);
     expect(NO_ACTIVE_ARTIFACT_LABEL).toBe("No active artifact");
+  });
+});
+
+describe("session event log", () => {
+  const ev = (id: number, kind: SessionEvent["kind"]): SessionEvent => ({
+    id,
+    kind,
+    label: kind,
+    detail: `detail-${id}`,
+  });
+
+  it("prepends newest first and enforces the cap", () => {
+    let log: SessionEvent[] = [];
+    log = appendSessionEvent(log, ev(1, "command"), 2);
+    log = appendSessionEvent(log, ev(2, "answer"), 2);
+    log = appendSessionEvent(log, ev(3, "error"), 2);
+
+    expect(log.map((e) => e.id)).toEqual([3, 2]);
+  });
+
+  it("formats command, answer, and error events", () => {
+    expect(formatSessionEvent(ev(1, "command"))).toBe("command · detail-1");
+    expect(
+      formatSessionEvent({ id: 2, kind: "answer", label: "answer", detail: "" }),
+    ).toBe("answer");
   });
 });
 
