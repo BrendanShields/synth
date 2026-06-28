@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 import {
   appendCommandRouteLogEntry,
   appendSessionEvent,
@@ -50,6 +51,11 @@ type RuntimeEvent = {
   status: RuntimeStatus;
 };
 
+type Workspace = {
+  root: string;
+  name: string;
+};
+
 type RuntimePhase = "loading" | "ready" | "runtime-unavailable";
 
 const RUNTIME_STATUS_EVENT = "synth-runtime-status";
@@ -94,6 +100,8 @@ function App() {
   );
   const [sessionEvents, setSessionEvents] = useState<SessionEvent[]>([]);
   const eventCounter = useRef(0);
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
 
   function recordEvent(
     kind: SessionEventKind,
@@ -104,6 +112,25 @@ function App() {
     setSessionEvents((events) =>
       appendSessionEvent(events, { id, kind, label, detail }),
     );
+  }
+
+  async function openWorkspace() {
+    try {
+      const selected = await open({ directory: true, multiple: false });
+      if (typeof selected !== "string") {
+        return;
+      }
+      const opened = await invoke<Workspace>("open_workspace", {
+        path: selected,
+      });
+      setWorkspace(opened);
+      setWorkspaceError(null);
+      recordEvent("command", "workspace", `opened ${opened.name}`);
+    } catch (error) {
+      setWorkspaceError(
+        error instanceof Error ? error.message : "Could not open workspace.",
+      );
+    }
   }
 
   useEffect(() => {
@@ -215,6 +242,20 @@ function App() {
         }
       });
 
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    invoke<Workspace | null>("get_workspace")
+      .then((opened) => {
+        if (active && opened) {
+          setWorkspace(opened);
+        }
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -461,6 +502,28 @@ function App() {
             The runtime event bridge. The Rust/Tauri core owns truth; the React
             renderer is a quiet visual surface for it.
           </p>
+          <div className="doc-workspace">
+            <span
+              className={
+                workspace
+                  ? "doc-workspace__name"
+                  : "doc-workspace__name doc-prose--muted"
+              }
+              title={workspace?.root}
+            >
+              {workspace ? workspace.name : "No workspace"}
+            </span>
+            <button
+              type="button"
+              className="doc-workspace__open"
+              onClick={openWorkspace}
+            >
+              {workspace ? "Change" : "Open"}
+            </button>
+            {workspaceError ? (
+              <span className="doc-workspace__error">{workspaceError}</span>
+            ) : null}
+          </div>
         </header>
 
         <p className="doc-prose">
