@@ -1,6 +1,12 @@
+use futures_util::StreamExt;
 use serde::Serialize;
+use tauri::Emitter;
 
 use crate::specs_index::StaticSpecDetail;
+
+pub const ANSWER_CHUNK_EVENT: &str = "synth-answer-chunk";
+pub const ANSWER_DONE_EVENT: &str = "synth-answer-done";
+pub const ANSWER_ERROR_EVENT: &str = "synth-answer-error";
 
 const OLLAMA_BASE_URL: &str = "http://localhost:11434";
 const OLLAMA_MODEL: &str = "gemma4:e4b";
@@ -191,6 +197,154 @@ pub async fn ask_spec(spec_id: String, question: String) -> Result<ModelAnswer, 
     })
 }
 
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct StreamChunk {
+    pub token: Option<String>,
+    pub done: bool,
+}
+
+pub fn parse_stream_line(line: &str) -> StreamChunk {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return StreamChunk::default();
+    }
+
+    let parsed: serde_json::Value = match serde_json::from_str(trimmed) {
+        Ok(value) => value,
+        Err(_) => return StreamChunk::default(),
+    };
+
+    StreamChunk {
+        token: parsed["response"]
+            .as_str()
+            .filter(|text| !text.is_empty())
+            .map(str::to_string),
+        done: parsed["done"].as_bool().unwrap_or(false),
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AnswerChunk {
+    request_id: u64,
+    token: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AnswerDone {
+    request_id: u64,
+    model: String,
+    answer: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AnswerError {
+    request_id: u64,
+    message: String,
+}
+
+#[tauri::command]
+pub async fn ask_stream(
+    app: tauri::AppHandle,
+    request_id: u64,
+    spec_id: Option<String>,
+    question: String,
+) -> Result<(), String> {
+    let trimmed = question.trim();
+    if trimmed.is_empty() {
+        return Err("Ask needs a question after ?.".to_string());
+    }
+
+    let config = default_provider_config();
+    let prompt = match &spec_id {
+        Some(id) => build_spec_prompt(&crate::specs_index::lookup_static_spec_detail(id)?, trimmed),
+        None => trimmed.to_string(),
+    };
+
+    let emit_error = |message: String| {
+        let _ = app.emit(ANSWER_ERROR_EVENT, AnswerError { request_id, message });
+    };
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|error| format!("client error: {error}"))?;
+
+    let body = serde_json::json!({
+        "model": config.model,
+        "prompt": prompt,
+        "stream": true,
+    });
+    let endpoint = format!("{}/api/generate", config.base_url);
+
+    let response = match client.post(&endpoint).json(&body).send().await {
+        Ok(response) if response.status().is_success() => response,
+        Ok(response) => {
+            emit_error(format!("Ollama returned status {}.", response.status()));
+            return Ok(());
+        }
+        Err(_) => {
+            emit_error("Ollama is not reachable at the configured endpoint.".to_string());
+            return Ok(());
+        }
+    };
+
+    let mut stream = response.bytes_stream();
+    let mut buffer = String::new();
+    let mut answer = String::new();
+
+    while let Some(item) = stream.next().await {
+        let bytes = match item {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                emit_error(format!("stream error: {error}"));
+                return Ok(());
+            }
+        };
+        buffer.push_str(&String::from_utf8_lossy(&bytes));
+
+        while let Some(newline) = buffer.find('\n') {
+            let line: String = buffer.drain(..=newline).collect();
+            let chunk = parse_stream_line(&line);
+            if let Some(token) = chunk.token {
+                answer.push_str(&token);
+                let _ = app.emit(
+                    ANSWER_CHUNK_EVENT,
+                    AnswerChunk { request_id, token },
+                );
+            }
+            if chunk.done {
+                let _ = app.emit(
+                    ANSWER_DONE_EVENT,
+                    AnswerDone {
+                        request_id,
+                        model: config.model,
+                        answer,
+                    },
+                );
+                return Ok(());
+            }
+        }
+    }
+
+    let chunk = parse_stream_line(&buffer);
+    if let Some(token) = chunk.token {
+        answer.push_str(&token);
+        let _ = app.emit(ANSWER_CHUNK_EVENT, AnswerChunk { request_id, token });
+    }
+    let _ = app.emit(
+        ANSWER_DONE_EVENT,
+        AnswerDone {
+            request_id,
+            model: config.model,
+            answer,
+        },
+    );
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn get_provider_status() -> ProviderStatus {
     let config = default_provider_config();
@@ -321,6 +475,40 @@ mod tests {
         assert!(prompt.contains(&detail.title));
         assert!(prompt.contains(&detail.summary));
         assert!(prompt.contains("what does this add?"));
+    }
+
+    #[test]
+    fn parses_stream_lines_into_tokens_and_done() {
+        let chunk = parse_stream_line(r#"{"response":"4","done":false}"#);
+        assert_eq!(chunk.token.as_deref(), Some("4"));
+        assert!(!chunk.done);
+
+        let done = parse_stream_line(r#"{"response":"","done":true}"#);
+        assert_eq!(done.token, None);
+        assert!(done.done);
+
+        assert_eq!(parse_stream_line("not json"), StreamChunk::default());
+        assert_eq!(parse_stream_line("   "), StreamChunk::default());
+    }
+
+    #[test]
+    fn serializes_answer_events_in_camel_case() {
+        let chunk = serde_json::to_value(AnswerChunk {
+            request_id: 7,
+            token: "x".to_string(),
+        })
+        .unwrap();
+        assert_eq!(chunk["requestId"], 7);
+        assert_eq!(chunk["token"], "x");
+
+        let done = serde_json::to_value(AnswerDone {
+            request_id: 7,
+            model: "gemma4:e4b".to_string(),
+            answer: "done".to_string(),
+        })
+        .unwrap();
+        assert_eq!(done["requestId"], 7);
+        assert_eq!(done["answer"], "done");
     }
 
     #[test]

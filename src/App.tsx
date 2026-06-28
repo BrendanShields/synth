@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
@@ -21,7 +21,6 @@ import {
   isHandledRoute,
   shouldSubmitCommandInput,
   type CommandRoute,
-  type ModelAnswer,
   type ProviderStatus,
   type SpecsIndex,
   type StaticSpecDetail,
@@ -79,10 +78,13 @@ function App() {
   const [providerStatus, setProviderStatus] = useState<ProviderStatus | null>(
     null,
   );
-  const [answer, setAnswer] = useState<ModelAnswer | null>(null);
+  const [answerPrompt, setAnswerPrompt] = useState<string | null>(null);
+  const [answerText, setAnswerText] = useState("");
   const [answerPending, setAnswerPending] = useState(false);
   const [answerError, setAnswerError] = useState<string | null>(null);
   const [answerGrounding, setAnswerGrounding] = useState<string | null>(null);
+  const requestCounter = useRef(0);
+  const currentRequest = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -199,6 +201,43 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const unlistens: UnlistenFn[] = [];
+    const isCurrent = (requestId: number) =>
+      requestId === currentRequest.current;
+
+    listen<{ requestId: number; token: string }>(
+      "synth-answer-chunk",
+      (event) => {
+        if (isCurrent(event.payload.requestId)) {
+          setAnswerText((text) => text + event.payload.token);
+        }
+      },
+    ).then((unlisten) => unlistens.push(unlisten));
+
+    listen<{ requestId: number; answer: string }>(
+      "synth-answer-done",
+      (event) => {
+        if (isCurrent(event.payload.requestId)) {
+          setAnswerText(event.payload.answer);
+          setAnswerPending(false);
+        }
+      },
+    ).then((unlisten) => unlistens.push(unlisten));
+
+    listen<{ requestId: number; message: string }>(
+      "synth-answer-error",
+      (event) => {
+        if (isCurrent(event.payload.requestId)) {
+          setAnswerError(event.payload.message);
+          setAnswerPending(false);
+        }
+      },
+    ).then((unlisten) => unlistens.push(unlisten));
+
+    return () => unlistens.forEach((unlisten) => unlisten());
+  }, []);
+
+  useEffect(() => {
     const scroller = document.querySelector<HTMLElement>(".doc-scroll");
     if (!scroller) {
       return;
@@ -251,7 +290,8 @@ function App() {
     specsIndexError,
     specDetail,
     specDetailError,
-    answer,
+    answerPrompt,
+    answerText,
     answerPending,
     answerError,
     answerGrounding,
@@ -276,21 +316,24 @@ function App() {
 
   async function dispatchAsk(question: string) {
     const grounding = specDetail?.specId ?? null;
-    setAnswerPending(true);
+    const id = (requestCounter.current += 1);
+    currentRequest.current = id;
+    setAnswerPrompt(question);
+    setAnswerText("");
     setAnswerError(null);
     setAnswerGrounding(grounding);
+    setAnswerPending(true);
     try {
-      const result = grounding
-        ? await invoke<ModelAnswer>("ask_spec", {
-            specId: grounding,
-            question,
-          })
-        : await invoke<ModelAnswer>("ask_model", { prompt: question });
-      setAnswer(result);
+      await invoke("ask_stream", {
+        requestId: id,
+        specId: grounding,
+        question,
+      });
     } catch (error) {
-      setAnswerError(formatModelError(error));
-    } finally {
-      setAnswerPending(false);
+      if (currentRequest.current === id) {
+        setAnswerError(formatModelError(error));
+        setAnswerPending(false);
+      }
     }
   }
 
@@ -523,21 +566,23 @@ function App() {
               <strong>Model unavailable</strong>
               <span>{answerError}</span>
             </div>
-          ) : answerPending ? (
-            <p className="doc-prose doc-prose--muted" role="status">
-              Thinking…
-            </p>
-          ) : answer ? (
+          ) : answerPrompt !== null ? (
             <article className="doc-answer">
               <p className="doc-answer__prompt doc-prose--mono">
-                {answer.prompt}
+                {answerPrompt}
                 {answerGrounding ? (
                   <span className="doc-answer__grounding">
                     {answerGrounding}
                   </span>
                 ) : null}
               </p>
-              <p className="doc-prose">{answer.answer}</p>
+              {answerText ? (
+                <p className="doc-prose">{answerText}</p>
+              ) : answerPending ? (
+                <p className="doc-prose doc-prose--muted" role="status">
+                  Thinking…
+                </p>
+              ) : null}
             </article>
           ) : (
             <p className="doc-prose doc-prose--muted" role="status">
