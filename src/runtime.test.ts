@@ -5,6 +5,7 @@ import {
   appendCommandRouteLogEntry,
   appendParsedCommandLogEntry,
   appendSessionEvent,
+  formatPlanningBaseline,
   formatSessionEvent,
   formatActiveArtifact,
   formatApprovalState,
@@ -237,6 +238,35 @@ describe("active artifact", () => {
   it("uses the neutral label when no artifact is active", () => {
     expect(formatActiveArtifact(null)).toBe(NO_ACTIVE_ARTIFACT_LABEL);
     expect(NO_ACTIVE_ARTIFACT_LABEL).toBe("No active artifact");
+  });
+});
+
+describe("formatPlanningBaseline", () => {
+  it("reports a complete baseline", () => {
+    expect(
+      formatPlanningBaseline({
+        prdPresent: true,
+        erdPresent: true,
+        complete: true,
+      }),
+    ).toBe("planning baseline complete");
+  });
+
+  it("names the missing documents", () => {
+    expect(
+      formatPlanningBaseline({
+        prdPresent: false,
+        erdPresent: true,
+        complete: false,
+      }),
+    ).toBe("planning baseline incomplete — missing PRD");
+    expect(
+      formatPlanningBaseline({
+        prdPresent: false,
+        erdPresent: false,
+        complete: false,
+      }),
+    ).toBe("planning baseline incomplete — missing PRD, ERD");
   });
 });
 

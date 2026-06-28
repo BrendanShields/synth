@@ -8,7 +8,9 @@ use command_dock::{parse_command, route_command};
 use provider::{ask_model, ask_spec, ask_stream, get_provider_status};
 use runtime_status::{announce_runtime_status, get_runtime_status};
 use specs_index::{get_static_spec_detail, list_specs_index};
-use workspace::{get_workspace, open_workspace, WorkspaceState};
+use workspace::{
+    get_workspace, inspect_planning_baseline, open_workspace, WorkspaceState,
+};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -30,7 +32,8 @@ pub fn run() {
             ask_spec,
             ask_stream,
             open_workspace,
-            get_workspace
+            get_workspace,
+            inspect_planning_baseline
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

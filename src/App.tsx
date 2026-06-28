@@ -11,6 +11,7 @@ import {
   formatCommandArgument,
   formatLabel,
   formatModelError,
+  formatPlanningBaseline,
   formatProviderState,
   formatRuntimeError,
   formatSessionEvent,
@@ -24,6 +25,7 @@ import {
   isHandledRoute,
   shouldSubmitCommandInput,
   type CommandRoute,
+  type PlanningBaseline,
   type ProviderStatus,
   type SessionEvent,
   type SessionEventKind,
@@ -102,6 +104,17 @@ function App() {
   const eventCounter = useRef(0);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [baseline, setBaseline] = useState<PlanningBaseline | null>(null);
+
+  async function refreshBaseline() {
+    try {
+      setBaseline(
+        await invoke<PlanningBaseline>("inspect_planning_baseline"),
+      );
+    } catch {
+      setBaseline(null);
+    }
+  }
 
   function recordEvent(
     kind: SessionEventKind,
@@ -126,6 +139,7 @@ function App() {
       setWorkspace(opened);
       setWorkspaceError(null);
       recordEvent("command", "workspace", `opened ${opened.name}`);
+      void refreshBaseline();
     } catch (error) {
       setWorkspaceError(
         error instanceof Error ? error.message : "Could not open workspace.",
@@ -253,6 +267,7 @@ function App() {
       .then((opened) => {
         if (active && opened) {
           setWorkspace(opened);
+          void refreshBaseline();
         }
       })
       .catch(() => {});
@@ -524,6 +539,14 @@ function App() {
               <span className="doc-workspace__error">{workspaceError}</span>
             ) : null}
           </div>
+          {workspace && baseline ? (
+            <p
+              className="doc-workspace__baseline doc-prose--mono"
+              data-complete={baseline.complete}
+            >
+              {formatPlanningBaseline(baseline)}
+            </p>
+          ) : null}
         </header>
 
         <p className="doc-prose">
