@@ -9,9 +9,11 @@ import {
   formatCommandError,
   formatCommandArgument,
   formatLabel,
+  formatModelError,
   formatProviderState,
   formatRuntimeError,
   formatSpecDetailError,
+  handledAskQuestion,
   formatSpecsIndexError,
   formatSpecsIndexSource,
   handledSpecDetailId,
@@ -158,6 +160,7 @@ describe("command dock helpers", () => {
     expect(routeTargetElementId("summary")).toBe("summary");
     expect(routeTargetElementId("specs")).toBe("specs");
     expect(routeTargetElementId("spec-detail")).toBe("spec-detail");
+    expect(routeTargetElementId("answer")).toBe("answer");
     expect(routeTargetElementId("runtime-status")).toBe("runtime-status");
     expect(routeTargetElementId("event-stream")).toBe("event-stream");
     expect(routeTargetElementId("phase")).toBe("phase");
@@ -231,6 +234,50 @@ describe("active artifact", () => {
   it("uses the neutral label when no artifact is active", () => {
     expect(formatActiveArtifact(null)).toBe(NO_ACTIVE_ARTIFACT_LABEL);
     expect(NO_ACTIVE_ARTIFACT_LABEL).toBe("No active artifact");
+  });
+});
+
+describe("handledAskQuestion", () => {
+  const ask: ParsedCommand = {
+    raw: "? what is 2 + 2?",
+    kind: "ask",
+    verb: "?",
+    argument: "what is 2 + 2?",
+    requiresApproval: false,
+    summary: "Ask intent recognized; artifact questions arrive in a later spec.",
+  };
+
+  it("returns the question for a handled answer route", () => {
+    const route: CommandRoute = {
+      parsed: ask,
+      disposition: "handled",
+      target: "answer",
+      message: "Handled ask route to the model.",
+    };
+    expect(handledAskQuestion(route)).toBe("what is 2 + 2?");
+  });
+
+  it("returns null for non-answer or unsupported routes", () => {
+    expect(
+      handledAskQuestion({
+        parsed: ask,
+        disposition: "unsupported",
+        target: "none",
+        message: "",
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("formatModelError", () => {
+  it("falls back for unknown shapes", () => {
+    expect(formatModelError(undefined)).toBe("The model is unavailable.");
+  });
+
+  it("passes through known errors", () => {
+    expect(formatModelError("Ollama is not reachable")).toBe(
+      "Ollama is not reachable",
+    );
   });
 });
 

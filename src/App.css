@@ -677,6 +677,20 @@ input {
   color: var(--ink-faint);
 }
 
+.doc-answer {
+  display: grid;
+  gap: 14px;
+}
+
+.doc-answer__prompt {
+  margin: 0;
+  color: var(--ink-faint);
+}
+
+.doc-answer__prompt::before {
+  content: "? ";
+}
+
 @media (max-width: 920px) {
   .doc-nav {
     display: none;

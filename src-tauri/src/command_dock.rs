@@ -50,6 +50,7 @@ pub enum RouteTarget {
     Summary,
     Specs,
     SpecDetail,
+    Answer,
     RuntimeStatus,
     EventStream,
     Phase,
@@ -143,10 +144,7 @@ pub fn route_raw_command(input: &str) -> CommandRoute {
             "Shell route blocked; command execution requires approval and is not yet available.",
         ),
         CommandKind::Navigate => route_navigation(parsed),
-        CommandKind::Ask => unsupported_route(
-            parsed,
-            "Ask routes are not available yet; artifact questions arrive in a later spec.",
-        ),
+        CommandKind::Ask => route_ask(parsed),
         CommandKind::Reference => unsupported_route(
             parsed,
             "Reference routes are not available yet; reference resolution arrives in a later spec.",
@@ -222,6 +220,19 @@ fn route_spec_detail(parsed: ParsedCommand, raw_spec_id: &str) -> CommandRoute {
             "Requested static spec detail is not available; that spec id is unknown.",
         ),
     }
+}
+
+fn route_ask(parsed: ParsedCommand) -> CommandRoute {
+    if parsed.argument.trim().is_empty() {
+        return unsupported_route(parsed, "Ask needs a question after ?.");
+    }
+
+    route(
+        parsed,
+        RouteDisposition::Handled,
+        RouteTarget::Answer,
+        "Handled ask route to the model.",
+    )
 }
 
 fn unsupported_route(parsed: ParsedCommand, message: &str) -> CommandRoute {
@@ -446,7 +457,6 @@ mod tests {
     #[test]
     fn returns_unsupported_for_all_non_navigation_non_shell_kinds() {
         let cases = [
-            ("? what does this mean", CommandKind::Ask),
             ("@docs/PRD.md", CommandKind::Reference),
             ("#FS-003", CommandKind::Tag),
             ("> stop", CommandKind::Steer),
@@ -553,6 +563,25 @@ mod tests {
         assert_eq!(route.target, RouteTarget::None);
         assert_eq!(route.resource, None);
         assert!(route.message.contains("not available"));
+    }
+
+    #[test]
+    fn routes_non_empty_ask_to_the_answer_target() {
+        let route = route_raw_command("? what is 2 + 2?");
+
+        assert_eq!(route.parsed.kind, CommandKind::Ask);
+        assert_eq!(route.parsed.argument, "what is 2 + 2?");
+        assert_eq!(route.disposition, RouteDisposition::Handled);
+        assert_eq!(route.target, RouteTarget::Answer);
+    }
+
+    #[test]
+    fn returns_unsupported_for_empty_ask() {
+        let route = route_raw_command("?");
+
+        assert_eq!(route.parsed.kind, CommandKind::Ask);
+        assert_eq!(route.disposition, RouteDisposition::Unsupported);
+        assert_eq!(route.target, RouteTarget::None);
     }
 
     #[test]
