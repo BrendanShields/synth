@@ -1,0 +1,11 @@
+{
+  "project": "Synth",
+  "note": "Ordered feature-spec backlog — the plan to follow. Each spec ships as a spec PR (docs/fs-NNN-*) then an implementation PR (synth/fs-NNN-*); see CLAUDE.md. Live PR + merge state is NOT stored here — it is computed at session start by .claude/hooks/synth-next.sh from git history and `gh`. Add the next planned spec here (with \"planned\": true) before it has a spec file so the hook can point at it.",
+  "specs": [
+    { "id": "FS-001", "title": "Runtime event bridge and Synth shell" },
+    { "id": "FS-002", "title": "Command dock parsing and intent routing" },
+    { "id": "FS-003", "title": "Slash command navigation routing" },
+    { "id": "FS-004", "title": "Specs index reader shell" },
+    { "id": "FS-005", "title": "Static spec detail selection" }
+  ]
+}
