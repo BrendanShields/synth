@@ -696,6 +696,38 @@ input {
   color: var(--ink-faint);
 }
 
+.doc-diff {
+  margin: 0;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.doc-diff__line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+}
+
+.doc-diff__line[data-kind="add"] {
+  color: #3f7d4f;
+  background: rgba(63, 125, 79, 0.07);
+}
+
+.doc-diff__line[data-kind="del"] {
+  color: #9a5036;
+  background: rgba(154, 80, 54, 0.07);
+}
+
+.doc-diff__line[data-kind="meta"] {
+  color: var(--ink-faint);
+}
+
 .doc-answer {
   display: grid;
   gap: 14px;

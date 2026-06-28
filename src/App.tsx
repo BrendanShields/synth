@@ -79,6 +79,12 @@ type GitCommit = {
   subject: string;
 };
 
+type GitDiff = {
+  isRepo: boolean;
+  empty: boolean;
+  lines: Array<{ kind: string; text: string }>;
+};
+
 type ApprovalRequest = {
   id: number;
   action: string;
@@ -207,6 +213,7 @@ function App() {
   const [workspaceSpecs, setWorkspaceSpecs] = useState<WorkspaceSpec[]>([]);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [gitLog, setGitLog] = useState<GitCommit[]>([]);
+  const [gitDiff, setGitDiff] = useState<GitDiff | null>(null);
   const [branchName, setBranchName] = useState("");
   const [commitMessage, setCommitMessage] = useState("");
   const [switchTarget, setSwitchTarget] = useState("");
@@ -381,6 +388,11 @@ function App() {
       setGitLog(await invoke<GitCommit[]>("git_log"));
     } catch {
       setGitLog([]);
+    }
+    try {
+      setGitDiff(await invoke<GitDiff>("git_diff"));
+    } catch {
+      setGitDiff(null);
     }
   }
 
@@ -985,6 +997,23 @@ function App() {
                 </li>
               ))}
             </ol>
+          </section>
+        ) : null}
+
+        {workspace && gitDiff?.isRepo && !gitDiff.empty ? (
+          <section className="doc-section" id="diff">
+            <h2>Diff</h2>
+            <pre className="doc-diff" aria-label="Working tree diff">
+              {gitDiff.lines.map((line, index) => (
+                <div
+                  className="doc-diff__line"
+                  data-kind={line.kind}
+                  key={index}
+                >
+                  {line.text || " "}
+                </div>
+              ))}
+            </pre>
           </section>
         ) : null}
 
