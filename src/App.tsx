@@ -144,19 +144,27 @@ function App() {
   const [providerStatus, setProviderStatus] = useState<ProviderStatus | null>(
     null,
   );
+  const [providerKind, setProviderKind] = useState("ollama");
   const [providerBaseUrl, setProviderBaseUrl] = useState("");
   const [providerModel, setProviderModel] = useState("");
+  const [providerApiKey, setProviderApiKey] = useState("");
   const [providerConfigError, setProviderConfigError] = useState<string | null>(
     null,
   );
 
   async function saveProviderConfig() {
     try {
-      await invoke<{ baseUrl: string; model: string }>("set_provider_config", {
-        baseUrl: providerBaseUrl.trim(),
-        model: providerModel.trim(),
-      });
+      await invoke<{ kind: string; baseUrl: string; model: string }>(
+        "set_provider_config",
+        {
+          kind: providerKind,
+          baseUrl: providerBaseUrl.trim(),
+          model: providerModel.trim(),
+          apiKey: providerApiKey.trim() || null,
+        },
+      );
       setProviderConfigError(null);
+      setProviderApiKey("");
       setProviderStatus(await invoke<ProviderStatus>("get_provider_status"));
     } catch (error) {
       setProviderConfigError(
@@ -556,9 +564,12 @@ function App() {
         }
       });
 
-    invoke<{ baseUrl: string; model: string }>("get_provider_config")
+    invoke<{ kind: string; baseUrl: string; model: string }>(
+      "get_provider_config",
+    )
       .then((config) => {
         if (active) {
+          setProviderKind(config.kind);
           setProviderBaseUrl(config.baseUrl);
           setProviderModel(config.model);
         }
@@ -1291,6 +1302,14 @@ function App() {
             {formatProviderState(providerStatus)}
           </p>
           <div className="doc-workspace__branch">
+            <select
+              aria-label="Provider kind"
+              value={providerKind}
+              onChange={(event) => setProviderKind(event.target.value)}
+            >
+              <option value="ollama">ollama</option>
+              <option value="openai">openai</option>
+            </select>
             <input
               aria-label="Provider base URL"
               placeholder="base url"
@@ -1307,6 +1326,17 @@ function App() {
               autoComplete="off"
               onChange={(event) => setProviderModel(event.target.value)}
             />
+            {providerKind === "openai" ? (
+              <input
+                aria-label="Provider API key"
+                type="password"
+                placeholder="api key"
+                value={providerApiKey}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => setProviderApiKey(event.target.value)}
+              />
+            ) : null}
             <button type="button" onClick={saveProviderConfig}>
               Save
             </button>
