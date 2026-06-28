@@ -204,6 +204,23 @@ pub fn list_workspace_specs_in(root: &Path) -> Vec<WorkspaceSpec> {
     specs
 }
 
+pub fn write_spec_file(root: &Path, spec_id: &str, content: &str) -> Result<String, String> {
+    let canonical = spec_id_from_dir_name(spec_id).ok_or("Invalid spec id.")?;
+    let relative = format!("docs/specs/{canonical}/spec.md");
+    let target = root.join(&relative);
+
+    if !is_within_root(root, &target) {
+        return Err("Path escapes the workspace.".to_string());
+    }
+
+    let dir = target
+        .parent()
+        .ok_or("Could not resolve spec directory.")?;
+    std::fs::create_dir_all(dir).map_err(|error| format!("Cannot create spec directory: {error}"))?;
+    std::fs::write(&target, content).map_err(|error| format!("Cannot write spec: {error}"))?;
+    Ok(relative)
+}
+
 #[tauri::command]
 pub fn list_workspace_specs(
     state: tauri::State<'_, WorkspaceState>,
@@ -311,6 +328,24 @@ mod tests {
             vec!["FS-001", "FS-002"]
         );
         assert_eq!(listed[0].path, "docs/specs/FS-001/spec.md");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn write_spec_file_writes_within_the_jail() {
+        let base = std::env::temp_dir().join(format!("synth-fs025-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+
+        let relative = write_spec_file(&base, "fs-099", "hello spec").unwrap();
+        assert_eq!(relative, "docs/specs/FS-099/spec.md");
+        assert_eq!(
+            std::fs::read_to_string(base.join("docs/specs/FS-099/spec.md")).unwrap(),
+            "hello spec"
+        );
+
+        assert!(write_spec_file(&base, "notaspec", "x").is_err());
 
         let _ = std::fs::remove_dir_all(&base);
     }

@@ -135,6 +135,27 @@ function App() {
   const [specDraft, setSpecDraft] = useState<string | null>(null);
   const [draftPending, setDraftPending] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
+  const [saveSpecId, setSaveSpecId] = useState("");
+
+  async function requestSaveSpec() {
+    const specId = saveSpecId.trim();
+    if (!specId || !specDraft) {
+      return;
+    }
+    try {
+      const request = await invoke<ApprovalRequest>("request_save_spec", {
+        specId,
+        content: specDraft,
+      });
+      setPendingApproval(request);
+      setApprovalNotice(null);
+      recordEvent("command", "approval", `requested ${request.command}`);
+    } catch (error) {
+      setApprovalNotice(
+        error instanceof Error ? error.message : "Could not request save.",
+      );
+    }
+  }
 
   async function draftSpec() {
     if (!classificationRequest) {
@@ -298,6 +319,7 @@ function App() {
         setPushRemote("");
         setPrTitle("");
         setPrBody("");
+        setSaveSpecId("");
         void refreshBaseline();
       }
     } catch (error) {
@@ -1145,7 +1167,22 @@ function App() {
                   <span>{draftError}</span>
                 </div>
               ) : specDraft ? (
-                <pre className="doc-reader">{specDraft}</pre>
+                <>
+                  <pre className="doc-reader">{specDraft}</pre>
+                  <div className="doc-workspace__branch">
+                    <input
+                      aria-label="Spec id to save"
+                      placeholder="spec id (e.g. FS-099)"
+                      value={saveSpecId}
+                      spellCheck={false}
+                      autoComplete="off"
+                      onChange={(event) => setSaveSpecId(event.target.value)}
+                    />
+                    <button type="button" onClick={requestSaveSpec}>
+                      Save spec
+                    </button>
+                  </div>
+                </>
               ) : null}
             </div>
           ) : (

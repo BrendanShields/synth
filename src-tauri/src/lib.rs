@@ -9,7 +9,7 @@ mod workspace;
 
 use approvals::{
     request_commit, request_create_branch, request_create_pr, request_push,
-    request_switch_branch, resolve_approval, ApprovalState,
+    request_save_spec, request_switch_branch, resolve_approval, ApprovalState,
 };
 use classify::classify_request;
 use command_dock::{parse_command, route_command};
@@ -54,6 +54,7 @@ pub fn run() {
             request_switch_branch,
             request_push,
             request_create_pr,
+            request_save_spec,
             resolve_approval,
             classify_request,
             draft_spec
