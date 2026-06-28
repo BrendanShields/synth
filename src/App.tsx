@@ -76,6 +76,19 @@ type GitCommit = {
   subject: string;
 };
 
+type ApprovalRequest = {
+  id: number;
+  action: string;
+  summary: string;
+  command: string;
+};
+
+type ApprovalOutcome = {
+  id: number;
+  approved: boolean;
+  message: string;
+};
+
 type RuntimePhase = "loading" | "ready" | "runtime-unavailable";
 
 const RUNTIME_STATUS_EVENT = "synth-runtime-status";
@@ -128,6 +141,58 @@ function App() {
   const [workspaceSpecs, setWorkspaceSpecs] = useState<WorkspaceSpec[]>([]);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [gitLog, setGitLog] = useState<GitCommit[]>([]);
+  const [branchName, setBranchName] = useState("");
+  const [pendingApproval, setPendingApproval] =
+    useState<ApprovalRequest | null>(null);
+  const [approvalNotice, setApprovalNotice] = useState<string | null>(null);
+
+  async function requestBranch() {
+    const name = branchName.trim();
+    if (!name) {
+      return;
+    }
+    try {
+      const request = await invoke<ApprovalRequest>("request_create_branch", {
+        name,
+      });
+      setPendingApproval(request);
+      setApprovalNotice(null);
+      recordEvent("command", "approval", `requested ${request.command}`);
+    } catch (error) {
+      setApprovalNotice(
+        error instanceof Error ? error.message : "Could not request branch.",
+      );
+    }
+  }
+
+  async function resolveApproval(approved: boolean) {
+    if (!pendingApproval) {
+      return;
+    }
+    const id = pendingApproval.id;
+    try {
+      const outcome = await invoke<ApprovalOutcome>("resolve_approval", {
+        id,
+        approved,
+      });
+      setPendingApproval(null);
+      setApprovalNotice(outcome.message);
+      recordEvent(
+        approved ? "command" : "error",
+        "approval",
+        outcome.message,
+      );
+      if (approved) {
+        setBranchName("");
+        void refreshBaseline();
+      }
+    } catch (error) {
+      setPendingApproval(null);
+      setApprovalNotice(
+        error instanceof Error ? error.message : "Approval failed.",
+      );
+    }
+  }
 
   async function viewDoc(kind: string) {
     try {
@@ -608,6 +673,26 @@ function App() {
               {formatGitStatus(gitStatus)}
             </p>
           ) : null}
+          {workspace && gitStatus?.isRepo ? (
+            <div className="doc-workspace__branch">
+              <input
+                aria-label="New branch name"
+                placeholder="new branch name"
+                value={branchName}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => setBranchName(event.target.value)}
+              />
+              <button type="button" onClick={requestBranch}>
+                Create branch
+              </button>
+            </div>
+          ) : null}
+          {approvalNotice ? (
+            <p className="doc-workspace__notice doc-prose--mono">
+              {approvalNotice}
+            </p>
+          ) : null}
           {workspace && baseline && (baseline.prdPresent || baseline.erdPresent) ? (
             <div className="doc-workspace__docs">
               {baseline.prdPresent ? (
@@ -972,6 +1057,39 @@ function App() {
           </form>
         </div>
       </div>
+
+      {pendingApproval ? (
+        <div
+          className="doc-approval"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Approval required"
+        >
+          <div className="doc-approval__panel">
+            <p className="doc-approval__title">Approve action</p>
+            <p className="doc-approval__summary">{pendingApproval.summary}</p>
+            <code className="doc-approval__command">
+              {pendingApproval.command}
+            </code>
+            <div className="doc-approval__actions">
+              <button
+                type="button"
+                className="doc-approval__deny"
+                onClick={() => resolveApproval(false)}
+              >
+                Deny
+              </button>
+              <button
+                type="button"
+                className="doc-approval__approve"
+                onClick={() => resolveApproval(true)}
+              >
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <footer className="doc-foot">
         <div className="doc-foot__status" aria-live="polite">

@@ -1,3 +1,4 @@
+mod approvals;
 mod command_dock;
 mod git;
 mod provider;
@@ -5,6 +6,7 @@ mod runtime_status;
 mod specs_index;
 mod workspace;
 
+use approvals::{request_create_branch, resolve_approval, ApprovalState};
 use command_dock::{parse_command, route_command};
 use git::{git_log, git_status};
 use provider::{ask_model, ask_spec, ask_stream, get_provider_status};
@@ -23,6 +25,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(WorkspaceState::default())
+        .manage(ApprovalState::default())
         .invoke_handler(tauri::generate_handler![
             get_runtime_status,
             announce_runtime_status,
@@ -40,7 +43,9 @@ pub fn run() {
             read_workspace_doc,
             list_workspace_specs,
             git_status,
-            git_log
+            git_log,
+            request_create_branch,
+            resolve_approval
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

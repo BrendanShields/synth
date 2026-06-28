@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use serde::Serialize;
 
 use crate::workspace::WorkspaceState;
@@ -140,6 +142,23 @@ pub fn git_log(state: tauri::State<'_, WorkspaceState>) -> Result<Vec<GitCommit>
     }
 }
 
+pub fn create_branch(root: &Path, name: &str) -> Result<(), String> {
+    let output = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["branch", name])
+        .output()
+        .map_err(|error| format!("Could not run git: {error}"))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "git branch failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,6 +222,35 @@ mod tests {
         .unwrap();
         assert_eq!(serialized["short"], "abc1234");
         assert_eq!(serialized["subject"], "hello");
+    }
+
+    #[test]
+    fn create_branch_in_a_temp_repo() {
+        let dir = std::env::temp_dir().join(format!("synth-fs018-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .current_dir(&dir)
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        assert!(git(&["init", "-q"]).status.success());
+        git(&["config", "user.email", "t@t"]);
+        git(&["config", "user.name", "t"]);
+        assert!(git(&["commit", "--allow-empty", "-q", "-m", "init"])
+            .status
+            .success());
+
+        assert!(create_branch(&dir, "feature/x").is_ok());
+        let listed = git(&["branch", "--list", "feature/x"]);
+        assert!(String::from_utf8_lossy(&listed.stdout).contains("feature/x"));
+
+        assert!(create_branch(&dir, "feature/x").is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
