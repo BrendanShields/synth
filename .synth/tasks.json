@@ -11,6 +11,9 @@
     { "id": "FS-007", "title": "Ollama provider status" },
     { "id": "FS-008", "title": "Ask-the-model single-shot completion" },
     { "id": "FS-009", "title": "Ask the active spec artifact" },
-    { "id": "FS-010", "title": "Streaming model answers", "planned": true }
+    { "id": "FS-010", "title": "Streaming model answers" },
+    { "id": "FS-011", "title": "In-session event log" },
+    { "id": "FS-012", "title": "Open a jailed workspace" },
+    { "id": "FS-013", "title": "Detect the workspace planning baseline", "planned": true }
   ]
 }
