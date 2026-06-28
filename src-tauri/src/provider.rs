@@ -17,6 +17,8 @@ pub struct ProviderConfig {
     pub kind: String,
     pub base_url: String,
     pub model: String,
+    #[serde(skip)]
+    pub api_key: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -51,7 +53,12 @@ pub fn default_provider_config() -> ProviderConfig {
         kind: "ollama".to_string(),
         base_url: OLLAMA_BASE_URL.to_string(),
         model: OLLAMA_MODEL.to_string(),
+        api_key: None,
     }
+}
+
+pub fn is_valid_provider_kind(kind: &str) -> bool {
+    matches!(kind.trim().to_ascii_lowercase().as_str(), "ollama" | "openai")
 }
 
 pub struct ProviderState(pub std::sync::Mutex<ProviderConfig>);
@@ -86,9 +93,14 @@ pub fn get_provider_config(state: tauri::State<'_, ProviderState>) -> ProviderCo
 #[tauri::command]
 pub fn set_provider_config(
     state: tauri::State<'_, ProviderState>,
+    kind: String,
     base_url: String,
     model: String,
+    api_key: Option<String>,
 ) -> Result<ProviderConfig, String> {
+    if !is_valid_provider_kind(&kind) {
+        return Err("Invalid provider kind.".to_string());
+    }
     if !is_valid_base_url(&base_url) {
         return Err("Invalid base URL.".to_string());
     }
@@ -97,10 +109,20 @@ pub fn set_provider_config(
         return Err("Invalid model.".to_string());
     }
 
+    let api_key = api_key.and_then(|key| {
+        let trimmed = key.trim().to_string();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    });
+
     let config = ProviderConfig {
-        kind: "ollama".to_string(),
+        kind: kind.trim().to_ascii_lowercase(),
         base_url: base_url.trim().to_string(),
         model,
+        api_key,
     };
     *state.0.lock().expect("provider state lock poisoned") = config.clone();
     Ok(config)
@@ -176,6 +198,62 @@ pub fn parse_generate_answer(body: &str) -> Result<String, String> {
         .ok_or_else(|| "response did not contain an answer".to_string())
 }
 
+fn is_openai(config: &ProviderConfig) -> bool {
+    config.kind == "openai"
+}
+
+pub fn request_endpoint(config: &ProviderConfig) -> String {
+    if is_openai(config) {
+        format!("{}/v1/chat/completions", config.base_url)
+    } else {
+        format!("{}/api/generate", config.base_url)
+    }
+}
+
+pub fn build_request_body(config: &ProviderConfig, prompt: &str) -> serde_json::Value {
+    if is_openai(config) {
+        serde_json::json!({
+            "model": config.model,
+            "messages": [{ "role": "user", "content": prompt }],
+            "stream": false,
+        })
+    } else {
+        build_generate_body(config, prompt)
+    }
+}
+
+pub fn parse_answer(kind: &str, body: &str) -> Result<String, String> {
+    let parsed: serde_json::Value =
+        serde_json::from_str(body).map_err(|error| format!("invalid response: {error}"))?;
+
+    let answer = if kind == "openai" {
+        parsed["choices"][0]["message"]["content"].as_str()
+    } else {
+        parsed["response"].as_str()
+    };
+
+    answer
+        .map(str::to_string)
+        .ok_or_else(|| "response did not contain an answer".to_string())
+}
+
+pub fn parse_openai_models(body: &str) -> Vec<String> {
+    let parsed: serde_json::Value = match serde_json::from_str(body) {
+        Ok(value) => value,
+        Err(_) => return Vec::new(),
+    };
+
+    parsed["data"]
+        .as_array()
+        .map(|models| {
+            models
+                .iter()
+                .filter_map(|model| model["id"].as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 pub fn build_spec_prompt(detail: &StaticSpecDetail, question: &str) -> String {
     format!(
         "You are answering a question about a software feature spec. Use only the context below.\n\n\
@@ -195,22 +273,27 @@ pub fn build_spec_prompt(detail: &StaticSpecDetail, question: &str) -> String {
 }
 
 async fn generate(config: &ProviderConfig, prompt: &str) -> Result<String, String> {
-    let endpoint = format!("{}/api/generate", config.base_url);
-
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
         .build()
         .map_err(|error| format!("client error: {error}"))?;
 
-    let response = client
-        .post(&endpoint)
-        .json(&build_generate_body(config, prompt))
+    let mut request = client
+        .post(request_endpoint(config))
+        .json(&build_request_body(config, prompt));
+    if is_openai(config) {
+        if let Some(key) = &config.api_key {
+            request = request.bearer_auth(key);
+        }
+    }
+
+    let response = request
         .send()
         .await
-        .map_err(|_| "Ollama is not reachable at the configured endpoint.".to_string())?;
+        .map_err(|_| "Provider is not reachable at the configured endpoint.".to_string())?;
 
     if !response.status().is_success() {
-        return Err(format!("Ollama returned status {}.", response.status()));
+        return Err(format!("Provider returned status {}.", response.status()));
     }
 
     let body = response
@@ -218,7 +301,7 @@ async fn generate(config: &ProviderConfig, prompt: &str) -> Result<String, Strin
         .await
         .map_err(|error| format!("read error: {error}"))?;
 
-    parse_generate_answer(&body)
+    parse_answer(&config.kind, &body)
 }
 
 #[tauri::command]
@@ -373,6 +456,30 @@ pub async fn ask_stream(
         let _ = app.emit(ANSWER_ERROR_EVENT, AnswerError { request_id, message });
     };
 
+    if is_openai(&config) {
+        match generate(&config, &prompt).await {
+            Ok(answer) => {
+                let _ = app.emit(
+                    ANSWER_CHUNK_EVENT,
+                    AnswerChunk {
+                        request_id,
+                        token: answer.clone(),
+                    },
+                );
+                let _ = app.emit(
+                    ANSWER_DONE_EVENT,
+                    AnswerDone {
+                        request_id,
+                        model: config.model,
+                        answer,
+                    },
+                );
+            }
+            Err(error) => emit_error(error),
+        }
+        return Ok(());
+    }
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
         .build()
@@ -456,7 +563,6 @@ pub async fn get_provider_status(
     state: tauri::State<'_, ProviderState>,
 ) -> Result<ProviderStatus, String> {
     let config = current_config(&state);
-    let endpoint = format!("{}/api/tags", config.base_url);
 
     let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(3))
@@ -466,14 +572,38 @@ pub async fn get_provider_status(
         Err(error) => return Ok(unreachable_status(config, format!("client error: {error}"))),
     };
 
-    let status = match client.get(&endpoint).send().await {
-        Ok(response) => match response.text().await {
-            Ok(body) => reachable_status(config, parse_ollama_models(&body)),
+    let (endpoint, openai) = if is_openai(&config) {
+        (format!("{}/v1/models", config.base_url), true)
+    } else {
+        (format!("{}/api/tags", config.base_url), false)
+    };
+
+    let mut request = client.get(&endpoint);
+    if openai {
+        if let Some(key) = &config.api_key {
+            request = request.bearer_auth(key);
+        }
+    }
+
+    let status = match request.send().await {
+        Ok(response) if response.status().is_success() => match response.text().await {
+            Ok(body) => {
+                let models = if openai {
+                    parse_openai_models(&body)
+                } else {
+                    parse_ollama_models(&body)
+                };
+                reachable_status(config, models)
+            }
             Err(error) => unreachable_status(config, format!("read error: {error}")),
         },
+        Ok(response) => {
+            let code = response.status();
+            unreachable_status(config, format!("provider returned status {code}."))
+        }
         Err(_) => unreachable_status(
             config,
-            "Ollama is not reachable at the configured endpoint.".to_string(),
+            "Provider is not reachable at the configured endpoint.".to_string(),
         ),
     };
     Ok(status)
@@ -644,6 +774,80 @@ mod tests {
         assert!(!is_valid_base_url("ftp://x"));
         assert!(!is_valid_base_url("http://has space"));
         assert!(!is_valid_base_url("localhost:11434"));
+    }
+
+    #[test]
+    fn validates_provider_kinds() {
+        assert!(is_valid_provider_kind("ollama"));
+        assert!(is_valid_provider_kind("openai"));
+        assert!(is_valid_provider_kind("OpenAI"));
+        assert!(!is_valid_provider_kind("anthropic"));
+        assert!(!is_valid_provider_kind(""));
+    }
+
+    fn openai_config() -> ProviderConfig {
+        ProviderConfig {
+            kind: "openai".to_string(),
+            base_url: "https://api.example.com".to_string(),
+            model: "gpt-4o-mini".to_string(),
+            api_key: Some("sk-test".to_string()),
+        }
+    }
+
+    #[test]
+    fn builds_kind_specific_request_bodies_and_endpoints() {
+        let ollama = build_request_body(&default_provider_config(), "hi");
+        assert_eq!(ollama["prompt"], "hi");
+        assert_eq!(ollama["stream"], false);
+        assert_eq!(
+            request_endpoint(&default_provider_config()),
+            "http://localhost:11434/api/generate"
+        );
+
+        let openai = build_request_body(&openai_config(), "hi");
+        assert_eq!(openai["messages"][0]["role"], "user");
+        assert_eq!(openai["messages"][0]["content"], "hi");
+        assert_eq!(openai["stream"], false);
+        assert_eq!(
+            request_endpoint(&openai_config()),
+            "https://api.example.com/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn parses_kind_specific_answers() {
+        assert_eq!(
+            parse_answer("ollama", r#"{"response":"4"}"#).unwrap(),
+            "4"
+        );
+        assert_eq!(
+            parse_answer(
+                "openai",
+                r#"{"choices":[{"message":{"content":"4"}}]}"#
+            )
+            .unwrap(),
+            "4"
+        );
+        assert!(parse_answer("openai", r#"{"choices":[]}"#).is_err());
+        assert!(parse_answer("ollama", "not json").is_err());
+    }
+
+    #[test]
+    fn parses_openai_models() {
+        let body = r#"{"data":[{"id":"gpt-4o-mini"},{"id":"gpt-4o"}]}"#;
+        assert_eq!(
+            parse_openai_models(body),
+            vec!["gpt-4o-mini".to_string(), "gpt-4o".to_string()]
+        );
+        assert!(parse_openai_models("{}").is_empty());
+    }
+
+    #[test]
+    fn api_key_is_not_serialized_to_the_renderer() {
+        let serialized = serde_json::to_value(openai_config()).unwrap();
+        assert_eq!(serialized["kind"], "openai");
+        assert!(serialized.get("apiKey").is_none());
+        assert!(serialized.get("api_key").is_none());
     }
 
     #[test]

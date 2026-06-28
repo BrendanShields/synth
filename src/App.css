@@ -862,6 +862,17 @@ input {
   font-size: 0.76rem;
 }
 
+.doc-workspace__branch select {
+  flex: none;
+  padding: 5px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}
+
 .doc-workspace__branch button,
 .doc-workspace__docs button,
 .doc-reader__close {
