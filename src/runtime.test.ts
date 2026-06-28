@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SPREAD,
+  inertiaStep,
   NO_ACTIVE_ARTIFACT_LABEL,
   appendCommandRouteLogEntry,
   appendParsedCommandLogEntry,
@@ -450,6 +451,21 @@ describe("specs index helpers", () => {
     expect(formatSpecsIndexSource(index)).toBe(
       "specs-index · static-rust-catalog",
     );
+  });
+});
+
+describe("inertiaStep", () => {
+  it("eases a fraction of the way toward the target", () => {
+    expect(inertiaStep(0, 100, 0.1)).toBeCloseTo(10);
+    expect(inertiaStep(10, 100, 0.1)).toBeCloseTo(19);
+  });
+
+  it("snaps to the target within the snap threshold", () => {
+    expect(inertiaStep(99.7, 100, 0.1, 0.5)).toBe(100);
+  });
+
+  it("stays put when already at the target", () => {
+    expect(inertiaStep(100, 100)).toBe(100);
   });
 });
 

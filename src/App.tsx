@@ -23,6 +23,7 @@ import {
   handledAskQuestion,
   handledClassificationRequest,
   handledSpecDetailId,
+  inertiaStep,
   lineSpreadOffset,
   routeTargetElementId,
   isHandledRoute,
@@ -633,6 +634,75 @@ function App() {
     ).then((unlisten) => unlistens.push(unlisten));
 
     return () => unlistens.forEach((unlisten) => unlisten());
+  }, []);
+
+  useEffect(() => {
+    const scroller = document.querySelector<HTMLElement>(".doc-scroll");
+    if (!scroller) {
+      return;
+    }
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+
+    const view = scroller;
+    let target = view.scrollTop;
+    let raf = 0;
+    let animating = false;
+
+    const clamp = (value: number) =>
+      Math.max(0, Math.min(value, view.scrollHeight - view.clientHeight));
+
+    const tick = () => {
+      const next = inertiaStep(view.scrollTop, target);
+      view.scrollTop = next;
+      if (next === target) {
+        animating = false;
+        raf = 0;
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey) {
+        return;
+      }
+      const unit =
+        event.deltaMode === 1
+          ? 16
+          : event.deltaMode === 2
+            ? view.clientHeight
+            : 1;
+      const next = clamp(target + event.deltaY * unit);
+      if (next === target) {
+        return;
+      }
+      event.preventDefault();
+      target = next;
+      if (!animating) {
+        animating = true;
+        raf = requestAnimationFrame(tick);
+      }
+    };
+
+    const syncTarget = () => {
+      if (!animating) {
+        target = view.scrollTop;
+      }
+    };
+
+    view.addEventListener("wheel", onWheel, { passive: false });
+    view.addEventListener("scroll", syncTarget, { passive: true });
+
+    return () => {
+      if (raf) {
+        cancelAnimationFrame(raf);
+      }
+      view.removeEventListener("wheel", onWheel);
+      view.removeEventListener("scroll", syncTarget);
+    };
   }, []);
 
   useEffect(() => {

@@ -341,3 +341,15 @@ export function lineSpreadOffset(
 
   return 0;
 }
+
+export const INERTIA_EASE = 0.12;
+
+export function inertiaStep(
+  current: number,
+  target: number,
+  ease = INERTIA_EASE,
+  snap = 0.5,
+) {
+  const next = current + (target - current) * ease;
+  return Math.abs(target - next) < snap ? target : next;
+}
