@@ -113,6 +113,15 @@
     {
       "id": "FS-028",
       "title": "Configurable provider settings"
+    },
+    {
+      "id": "FS-029",
+      "title": "OpenAI-compatible provider shape"
+    },
+    {
+      "id": "FS-030",
+      "title": "Approval-gated amendment",
+      "planned": true
     }
   ]
 }
