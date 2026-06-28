@@ -1,0 +1,208 @@
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Mutex;
+
+use serde::Serialize;
+
+use crate::git;
+use crate::workspace::WorkspaceState;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApprovalRequest {
+    pub id: u64,
+    pub action: String,
+    pub summary: String,
+    pub command: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApprovalOutcome {
+    pub id: u64,
+    pub approved: bool,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum PendingAction {
+    CreateBranch(String),
+}
+
+#[derive(Default)]
+struct ApprovalInner {
+    next_id: u64,
+    pending: HashMap<u64, PendingAction>,
+}
+
+#[derive(Default)]
+pub struct ApprovalState(Mutex<ApprovalInner>);
+
+pub fn is_valid_branch_name(name: &str) -> bool {
+    if name.is_empty() || name.len() > 200 {
+        return false;
+    }
+    if name.starts_with('-') || name.starts_with('/') || name.ends_with('/') {
+        return false;
+    }
+    if name.contains("..") || name.contains("//") {
+        return false;
+    }
+    name.chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '/' | '-'))
+}
+
+impl ApprovalInner {
+    fn record_branch(&mut self, name: &str) -> ApprovalRequest {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.pending
+            .insert(id, PendingAction::CreateBranch(name.to_string()));
+        ApprovalRequest {
+            id,
+            action: "create-branch".to_string(),
+            summary: format!("Create branch {name}"),
+            command: format!("git branch {name}"),
+        }
+    }
+
+    fn take(&mut self, id: u64) -> Option<PendingAction> {
+        self.pending.remove(&id)
+    }
+}
+
+#[tauri::command]
+pub fn request_create_branch(
+    approvals: tauri::State<'_, ApprovalState>,
+    workspace: tauri::State<'_, WorkspaceState>,
+    name: String,
+) -> Result<ApprovalRequest, String> {
+    if !is_valid_branch_name(&name) {
+        return Err("Invalid branch name.".to_string());
+    }
+    if workspace
+        .0
+        .lock()
+        .expect("workspace state lock poisoned")
+        .is_none()
+    {
+        return Err("No workspace is open.".to_string());
+    }
+
+    Ok(approvals
+        .0
+        .lock()
+        .expect("approval state lock poisoned")
+        .record_branch(&name))
+}
+
+#[tauri::command]
+pub fn resolve_approval(
+    approvals: tauri::State<'_, ApprovalState>,
+    workspace: tauri::State<'_, WorkspaceState>,
+    id: u64,
+    approved: bool,
+) -> Result<ApprovalOutcome, String> {
+    let action = approvals
+        .0
+        .lock()
+        .expect("approval state lock poisoned")
+        .take(id)
+        .ok_or("Unknown or already-resolved approval.")?;
+
+    if !approved {
+        return Ok(ApprovalOutcome {
+            id,
+            approved: false,
+            message: "Denied.".to_string(),
+        });
+    }
+
+    let root = {
+        let guard = workspace.0.lock().expect("workspace state lock poisoned");
+        guard.as_ref().ok_or("No workspace is open.")?.root.clone()
+    };
+
+    match action {
+        PendingAction::CreateBranch(name) => {
+            git::create_branch(Path::new(&root), &name)?;
+            Ok(ApprovalOutcome {
+                id,
+                approved: true,
+                message: format!("Created branch {name}."),
+            })
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_valid_branch_names() {
+        for name in ["feature/x", "fix-1", "a.b", "release/v1.2", "synth/fs-018"] {
+            assert!(is_valid_branch_name(name), "{name} should be valid");
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_branch_names() {
+        for name in ["", "-rf", "has space", "a..b", "feature/", "/x", "a//b", "x\u{7}"] {
+            assert!(!is_valid_branch_name(name), "{name} should be invalid");
+        }
+    }
+
+    #[test]
+    fn request_records_a_pending_action_and_builds_the_exact_command() {
+        let mut inner = ApprovalInner::default();
+        let request = inner.record_branch("feature/x");
+
+        assert_eq!(request.id, 0);
+        assert_eq!(request.action, "create-branch");
+        assert_eq!(request.command, "git branch feature/x");
+        assert_eq!(inner.pending.len(), 1);
+    }
+
+    #[test]
+    fn take_resolves_once_then_is_gone() {
+        let mut inner = ApprovalInner::default();
+        let request = inner.record_branch("feature/x");
+
+        assert_eq!(
+            inner.take(request.id),
+            Some(PendingAction::CreateBranch("feature/x".to_string()))
+        );
+        assert_eq!(inner.take(request.id), None);
+        assert_eq!(inner.take(999), None);
+    }
+
+    #[test]
+    fn ids_increment_per_request() {
+        let mut inner = ApprovalInner::default();
+        assert_eq!(inner.record_branch("a").id, 0);
+        assert_eq!(inner.record_branch("b").id, 1);
+        assert_eq!(inner.pending.len(), 2);
+    }
+
+    #[test]
+    fn serializes_request_and_outcome_in_camel_case() {
+        let request = serde_json::to_value(ApprovalRequest {
+            id: 3,
+            action: "create-branch".to_string(),
+            summary: "Create branch x".to_string(),
+            command: "git branch x".to_string(),
+        })
+        .unwrap();
+        assert_eq!(request["id"], 3);
+        assert_eq!(request["command"], "git branch x");
+
+        let outcome = serde_json::to_value(ApprovalOutcome {
+            id: 3,
+            approved: true,
+            message: "ok".to_string(),
+        })
+        .unwrap();
+        assert_eq!(outcome["approved"], true);
+    }
+}
