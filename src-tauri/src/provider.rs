@@ -54,6 +54,58 @@ pub fn default_provider_config() -> ProviderConfig {
     }
 }
 
+pub struct ProviderState(pub std::sync::Mutex<ProviderConfig>);
+
+impl Default for ProviderState {
+    fn default() -> Self {
+        ProviderState(std::sync::Mutex::new(default_provider_config()))
+    }
+}
+
+fn current_config(state: &tauri::State<'_, ProviderState>) -> ProviderConfig {
+    state
+        .0
+        .lock()
+        .expect("provider state lock poisoned")
+        .clone()
+}
+
+pub fn is_valid_base_url(url: &str) -> bool {
+    let trimmed = url.trim();
+    !trimmed.is_empty()
+        && trimmed.len() <= 300
+        && !trimmed.chars().any(char::is_whitespace)
+        && (trimmed.starts_with("http://") || trimmed.starts_with("https://"))
+}
+
+#[tauri::command]
+pub fn get_provider_config(state: tauri::State<'_, ProviderState>) -> ProviderConfig {
+    current_config(&state)
+}
+
+#[tauri::command]
+pub fn set_provider_config(
+    state: tauri::State<'_, ProviderState>,
+    base_url: String,
+    model: String,
+) -> Result<ProviderConfig, String> {
+    if !is_valid_base_url(&base_url) {
+        return Err("Invalid base URL.".to_string());
+    }
+    let model = model.trim().to_string();
+    if model.is_empty() || model.len() > 200 {
+        return Err("Invalid model.".to_string());
+    }
+
+    let config = ProviderConfig {
+        kind: "ollama".to_string(),
+        base_url: base_url.trim().to_string(),
+        model,
+    };
+    *state.0.lock().expect("provider state lock poisoned") = config.clone();
+    Ok(config)
+}
+
 pub fn parse_ollama_models(body: &str) -> Vec<String> {
     let parsed: serde_json::Value = match serde_json::from_str(body) {
         Ok(value) => value,
@@ -170,13 +222,16 @@ async fn generate(config: &ProviderConfig, prompt: &str) -> Result<String, Strin
 }
 
 #[tauri::command]
-pub async fn ask_model(prompt: String) -> Result<ModelAnswer, String> {
+pub async fn ask_model(
+    state: tauri::State<'_, ProviderState>,
+    prompt: String,
+) -> Result<ModelAnswer, String> {
     let trimmed = prompt.trim();
     if trimmed.is_empty() {
         return Err("Ask needs a question after ?.".to_string());
     }
 
-    let config = default_provider_config();
+    let config = current_config(&state);
     let answer = generate(&config, trimmed).await?;
 
     Ok(ModelAnswer {
@@ -207,13 +262,16 @@ pub fn build_spec_prompt_for_request(request: &str) -> String {
 }
 
 #[tauri::command]
-pub async fn draft_spec(request: String) -> Result<SpecDraft, String> {
+pub async fn draft_spec(
+    state: tauri::State<'_, ProviderState>,
+    request: String,
+) -> Result<SpecDraft, String> {
     if !spec_request_is_valid(&request) {
         return Err("Provide a request to draft a spec.".to_string());
     }
 
     let trimmed = request.trim();
-    let config = default_provider_config();
+    let config = current_config(&state);
     let draft = generate(&config, &build_spec_prompt_for_request(trimmed)).await?;
 
     Ok(SpecDraft {
@@ -223,14 +281,18 @@ pub async fn draft_spec(request: String) -> Result<SpecDraft, String> {
 }
 
 #[tauri::command]
-pub async fn ask_spec(spec_id: String, question: String) -> Result<ModelAnswer, String> {
+pub async fn ask_spec(
+    state: tauri::State<'_, ProviderState>,
+    spec_id: String,
+    question: String,
+) -> Result<ModelAnswer, String> {
     let trimmed = question.trim();
     if trimmed.is_empty() {
         return Err("Ask needs a question after ?.".to_string());
     }
 
     let detail = crate::specs_index::lookup_static_spec_detail(&spec_id)?;
-    let config = default_provider_config();
+    let config = current_config(&state);
     let answer = generate(&config, &build_spec_prompt(&detail, trimmed)).await?;
 
     Ok(ModelAnswer {
@@ -291,6 +353,7 @@ struct AnswerError {
 #[tauri::command]
 pub async fn ask_stream(
     app: tauri::AppHandle,
+    state: tauri::State<'_, ProviderState>,
     request_id: u64,
     spec_id: Option<String>,
     question: String,
@@ -300,7 +363,7 @@ pub async fn ask_stream(
         return Err("Ask needs a question after ?.".to_string());
     }
 
-    let config = default_provider_config();
+    let config = current_config(&state);
     let prompt = match &spec_id {
         Some(id) => build_spec_prompt(&crate::specs_index::lookup_static_spec_detail(id)?, trimmed),
         None => trimmed.to_string(),
@@ -389,8 +452,10 @@ pub async fn ask_stream(
 }
 
 #[tauri::command]
-pub async fn get_provider_status() -> ProviderStatus {
-    let config = default_provider_config();
+pub async fn get_provider_status(
+    state: tauri::State<'_, ProviderState>,
+) -> Result<ProviderStatus, String> {
+    let config = current_config(&state);
     let endpoint = format!("{}/api/tags", config.base_url);
 
     let client = match reqwest::Client::builder()
@@ -398,10 +463,10 @@ pub async fn get_provider_status() -> ProviderStatus {
         .build()
     {
         Ok(client) => client,
-        Err(error) => return unreachable_status(config, format!("client error: {error}")),
+        Err(error) => return Ok(unreachable_status(config, format!("client error: {error}"))),
     };
 
-    match client.get(&endpoint).send().await {
+    let status = match client.get(&endpoint).send().await {
         Ok(response) => match response.text().await {
             Ok(body) => reachable_status(config, parse_ollama_models(&body)),
             Err(error) => unreachable_status(config, format!("read error: {error}")),
@@ -410,7 +475,8 @@ pub async fn get_provider_status() -> ProviderStatus {
             config,
             "Ollama is not reachable at the configured endpoint.".to_string(),
         ),
-    }
+    };
+    Ok(status)
 }
 
 #[cfg(test)]
@@ -568,6 +634,16 @@ mod tests {
         ] {
             assert!(prompt.contains(heading), "missing {heading}");
         }
+    }
+
+    #[test]
+    fn validates_base_urls() {
+        assert!(is_valid_base_url("http://localhost:11434"));
+        assert!(is_valid_base_url("https://api.example.com"));
+        assert!(!is_valid_base_url(""));
+        assert!(!is_valid_base_url("ftp://x"));
+        assert!(!is_valid_base_url("http://has space"));
+        assert!(!is_valid_base_url("localhost:11434"));
     }
 
     #[test]
