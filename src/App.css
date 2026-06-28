@@ -664,7 +664,26 @@ input {
 
 .doc-foot__keys {
   display: flex;
+  align-items: center;
   gap: 26px;
+}
+
+.doc-foot__autonomy {
+  padding: 2px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.doc-foot__autonomy[data-mode="high_autonomy"] {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .doc-specs__entry[aria-current="true"] {
