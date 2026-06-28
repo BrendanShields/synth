@@ -58,8 +58,8 @@ Every feature `FS-NNN` ships as **two separate PRs**, and **each must be merged 
 1. **Spec PR (first).**
    - Branch: `docs/fs-NNN-<slug>`
    - Adds only `docs/specs/FS-NNN/spec.md` (copy `docs/templates/feature-spec.md`, strip the instructional text).
-   - Commit: `docs: add FS-NNN <title> spec` (or `spec(FS-NNN): ...`).
-   - PR title: `Add FS-NNN <title> spec`.
+   - Commit: `spec(FS-NNN): <title> spec`.
+   - PR title: `spec(FS-NNN): <title> spec`.
    - The spec must define all six non-negotiable sections (problem statement, requirements, acceptance criteria, tests/verification plan, success criteria, metrics) and its §12 declares the impl branch + expected impl PR title. **Do not start implementation until this PR is reviewed and merged.**
 
 2. **Implementation PR (second, only after the spec PR is merged).**
@@ -67,6 +67,7 @@ Every feature `FS-NNN` ships as **two separate PRs**, and **each must be merged 
    - Adds the code + tests. Implement to the spec *exactly*, including honoring its "out of scope" list — specs are deliberately narrow to avoid crossing trust boundaries prematurely.
    - Commits: `feat(FS-NNN): ...`, `test(FS-NNN): ...`.
    - PR title: `feat(FS-NNN): <title>`.
+   - PR description should summarize what changed, the verification results, and scope containment.
    - All three verification checks must pass before marking ready: `bun run build`, `bun run test`, `cargo test --manifest-path src-tauri/Cargo.toml`. Confirm no new privileged Tauri capabilities were added (`src-tauri/capabilities/*.json`) unless the spec scoped them.
 
 Do not begin the next spec's work until the current spec's implementation PR is merged. Keep unrelated work out of a spec PR.
@@ -79,11 +80,11 @@ A merged spec is a contract. If implementation reveals it's wrong, incomplete, t
 
 | Phase | Branch | PR title | Commits |
 | --- | --- | --- | --- |
-| Spec | `docs/fs-NNN-<slug>` | `Add FS-NNN <title> spec` | `docs:` / `spec(FS-NNN):` |
+| Spec | `docs/fs-NNN-<slug>` | `spec(FS-NNN): <title> spec` | `spec(FS-NNN):` |
 | Implementation | `synth/fs-NNN-<slug>` | `feat(FS-NNN): <title>` | `feat(FS-NNN):` / `test(FS-NNN):` |
 | Amendment | (new branch off a spec) | references the FS-NNN spec | `docs:` |
 
-Current state: FS-001..FS-004 are implemented and merged; the **FS-005 spec is merged, so FS-005 implementation is the next unblocked step**. Local `main` may lag the remote — `git pull` before starting.
+The SessionStart hook (`.claude/hooks/synth-next.sh`) computes the current pipeline state and the next action from git + `gh` each session — trust it over any state hardcoded here. The plan/backlog lives in `.synth/tasks.json`; add the next spec there (`"planned": true`) before writing it.
 
 ## Skills available in this repo
 
