@@ -14,7 +14,7 @@ use approvals::{
 use classify::classify_request;
 use command_dock::{parse_command, route_command};
 use git::{git_log, git_status};
-use provider::{ask_model, ask_spec, ask_stream, get_provider_status};
+use provider::{ask_model, ask_spec, ask_stream, draft_spec, get_provider_status};
 use runtime_status::{announce_runtime_status, get_runtime_status};
 use specs_index::{get_static_spec_detail, list_specs_index};
 use workspace::{
@@ -55,7 +55,8 @@ pub fn run() {
             request_push,
             request_create_pr,
             resolve_approval,
-            classify_request
+            classify_request,
+            draft_spec
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

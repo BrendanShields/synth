@@ -39,6 +39,13 @@ pub struct ModelAnswer {
     pub answer: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpecDraft {
+    pub request: String,
+    pub draft: String,
+}
+
 pub fn default_provider_config() -> ProviderConfig {
     ProviderConfig {
         kind: "ollama".to_string(),
@@ -176,6 +183,42 @@ pub async fn ask_model(prompt: String) -> Result<ModelAnswer, String> {
         model: config.model,
         prompt: trimmed.to_string(),
         answer,
+    })
+}
+
+pub fn spec_request_is_valid(request: &str) -> bool {
+    !request.trim().is_empty()
+}
+
+pub fn build_spec_prompt_for_request(request: &str) -> String {
+    format!(
+        "You are drafting a story-sized feature spec for the request below. \
+         Write concise markdown using exactly these section headings:\n\
+         ## 1. Problem statement\n\
+         ## 2. Requirements\n\
+         ## 3. Acceptance criteria\n\
+         ## 4. Tests / verification plan\n\
+         ## 5. Success criteria\n\
+         ## 6. Metrics used to evaluate success\n\n\
+         Keep requirements testable and solution-free where appropriate.\n\n\
+         Request: {request}\n\n\
+         Feature spec:"
+    )
+}
+
+#[tauri::command]
+pub async fn draft_spec(request: String) -> Result<SpecDraft, String> {
+    if !spec_request_is_valid(&request) {
+        return Err("Provide a request to draft a spec.".to_string());
+    }
+
+    let trimmed = request.trim();
+    let config = default_provider_config();
+    let draft = generate(&config, &build_spec_prompt_for_request(trimmed)).await?;
+
+    Ok(SpecDraft {
+        request: trimmed.to_string(),
+        draft,
     })
 }
 
@@ -509,6 +552,29 @@ mod tests {
         .unwrap();
         assert_eq!(done["requestId"], 7);
         assert_eq!(done["answer"], "done");
+    }
+
+    #[test]
+    fn spec_prompt_includes_request_and_six_sections() {
+        let prompt = build_spec_prompt_for_request("Add a loading state to the dock");
+        assert!(prompt.contains("Add a loading state to the dock"));
+        for heading in [
+            "## 1. Problem statement",
+            "## 2. Requirements",
+            "## 3. Acceptance criteria",
+            "## 4. Tests / verification plan",
+            "## 5. Success criteria",
+            "## 6. Metrics used to evaluate success",
+        ] {
+            assert!(prompt.contains(heading), "missing {heading}");
+        }
+    }
+
+    #[test]
+    fn spec_request_validation_rejects_empty() {
+        assert!(spec_request_is_valid("do a thing"));
+        assert!(!spec_request_is_valid("   "));
+        assert!(!spec_request_is_valid(""));
     }
 
     #[test]
