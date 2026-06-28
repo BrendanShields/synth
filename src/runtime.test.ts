@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SPREAD,
+  NO_ACTIVE_ARTIFACT_LABEL,
   appendCommandRouteLogEntry,
   appendParsedCommandLogEntry,
+  formatActiveArtifact,
   formatApprovalState,
   formatCommandError,
   formatCommandArgument,
@@ -19,6 +21,7 @@ import {
   type CommandRoute,
   type ParsedCommand,
   type SpecsIndex,
+  type StaticSpecDetail,
 } from "./runtime";
 
 describe("formatLabel", () => {
@@ -201,6 +204,31 @@ describe("formatSpecDetailError", () => {
       "No static spec detail",
     );
     expect(formatSpecDetailError("unknown spec")).toBe("unknown spec");
+  });
+});
+
+describe("active artifact", () => {
+  const detail: StaticSpecDetail = {
+    specId: "FS-002",
+    title: "Command dock parsing and intent routing",
+    status: "Draft for review",
+    path: "docs/specs/FS-002/spec.md",
+    implementationBranch: "synth/fs-002-command-dock-parsing",
+    route: "/specs/FS-002",
+    summary: "Teaches the Rust core to classify command-dock input.",
+    scope: ["parse_command classifies input"],
+    limitations: ["Parsing only"],
+  };
+
+  it("labels an active artifact with its canonical id and title", () => {
+    expect(formatActiveArtifact(detail)).toBe(
+      "FS-002 · Command dock parsing and intent routing",
+    );
+  });
+
+  it("uses the neutral label when no artifact is active", () => {
+    expect(formatActiveArtifact(null)).toBe(NO_ACTIVE_ARTIFACT_LABEL);
+    expect(NO_ACTIVE_ARTIFACT_LABEL).toBe("No active artifact");
   });
 });
 
