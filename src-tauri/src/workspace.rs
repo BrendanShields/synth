@@ -170,6 +170,16 @@ pub fn spec_id_from_dir_name(name: &str) -> Option<String> {
     }
 }
 
+pub fn amendment_id_from_name(name: &str) -> Option<String> {
+    let digits = name.to_ascii_lowercase();
+    let digits = digits.strip_prefix("amd-")?;
+    if !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        Some(format!("AMD-{digits}"))
+    } else {
+        None
+    }
+}
+
 pub fn list_workspace_specs_in(root: &Path) -> Vec<WorkspaceSpec> {
     let specs_dir = root.join("docs/specs");
     if !is_within_root(root, &specs_dir) {
@@ -218,6 +228,30 @@ pub fn write_spec_file(root: &Path, spec_id: &str, content: &str) -> Result<Stri
         .ok_or("Could not resolve spec directory.")?;
     std::fs::create_dir_all(dir).map_err(|error| format!("Cannot create spec directory: {error}"))?;
     std::fs::write(&target, content).map_err(|error| format!("Cannot write spec: {error}"))?;
+    Ok(relative)
+}
+
+pub fn write_amendment_file(
+    root: &Path,
+    spec_id: &str,
+    amendment_id: &str,
+    content: &str,
+) -> Result<String, String> {
+    let spec = spec_id_from_dir_name(spec_id).ok_or("Invalid spec id.")?;
+    let amendment = amendment_id_from_name(amendment_id).ok_or("Invalid amendment id.")?;
+    let relative = format!("docs/specs/{spec}/amendments/{amendment}.md");
+    let target = root.join(&relative);
+
+    if !is_within_root(root, &target) {
+        return Err("Path escapes the workspace.".to_string());
+    }
+
+    let dir = target
+        .parent()
+        .ok_or("Could not resolve amendments directory.")?;
+    std::fs::create_dir_all(dir)
+        .map_err(|error| format!("Cannot create amendments directory: {error}"))?;
+    std::fs::write(&target, content).map_err(|error| format!("Cannot write amendment: {error}"))?;
     Ok(relative)
 }
 
@@ -348,6 +382,39 @@ mod tests {
         assert!(write_spec_file(&base, "notaspec", "x").is_err());
 
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn write_amendment_file_writes_within_the_jail() {
+        let base = std::env::temp_dir().join(format!("synth-fs030-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::create_dir_all(base.join("docs/specs/FS-005")).unwrap();
+        std::fs::write(base.join("docs/specs/FS-005/spec.md"), "original").unwrap();
+
+        let relative = write_amendment_file(&base, "fs-005", "amd-001", "deviation").unwrap();
+        assert_eq!(relative, "docs/specs/FS-005/amendments/AMD-001.md");
+        assert_eq!(
+            std::fs::read_to_string(base.join("docs/specs/FS-005/amendments/AMD-001.md")).unwrap(),
+            "deviation"
+        );
+        // the approved spec is untouched
+        assert_eq!(
+            std::fs::read_to_string(base.join("docs/specs/FS-005/spec.md")).unwrap(),
+            "original"
+        );
+        assert!(write_amendment_file(&base, "FS-005", "notanamendment", "x").is_err());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn amendment_id_classification() {
+        assert_eq!(amendment_id_from_name("AMD-001"), Some("AMD-001".to_string()));
+        assert_eq!(amendment_id_from_name("amd-2"), Some("AMD-2".to_string()));
+        assert_eq!(amendment_id_from_name("AMD-"), None);
+        assert_eq!(amendment_id_from_name("amd"), None);
+        assert_eq!(amendment_id_from_name("FS-001"), None);
     }
 
     #[test]
