@@ -6,7 +6,10 @@ mod runtime_status;
 mod specs_index;
 mod workspace;
 
-use approvals::{request_commit, request_create_branch, resolve_approval, ApprovalState};
+use approvals::{
+    request_commit, request_create_branch, request_switch_branch, resolve_approval,
+    ApprovalState,
+};
 use command_dock::{parse_command, route_command};
 use git::{git_log, git_status};
 use provider::{ask_model, ask_spec, ask_stream, get_provider_status};
@@ -46,6 +49,7 @@ pub fn run() {
             git_log,
             request_create_branch,
             request_commit,
+            request_switch_branch,
             resolve_approval
         ])
         .run(tauri::generate_context!())
