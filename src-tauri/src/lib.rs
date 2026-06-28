@@ -4,7 +4,7 @@ mod specs_index;
 
 use command_dock::{parse_command, route_command};
 use runtime_status::{announce_runtime_status, get_runtime_status};
-use specs_index::list_specs_index;
+use specs_index::{get_static_spec_detail, list_specs_index};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -17,7 +17,8 @@ pub fn run() {
             announce_runtime_status,
             parse_command,
             route_command,
-            list_specs_index
+            list_specs_index,
+            get_static_spec_detail
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

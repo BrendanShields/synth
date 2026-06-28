@@ -8,14 +8,17 @@ import {
   formatCommandArgument,
   formatLabel,
   formatRuntimeError,
+  formatSpecDetailError,
   formatSpecsIndexError,
   formatSpecsIndexSource,
+  handledSpecDetailId,
   lineSpreadOffset,
   routeTargetElementId,
   isHandledRoute,
   shouldSubmitCommandInput,
   type CommandRoute,
   type SpecsIndex,
+  type StaticSpecDetail,
 } from "./runtime";
 import "./App.css";
 
@@ -65,6 +68,8 @@ function App() {
   const [commandError, setCommandError] = useState<string | null>(null);
   const [specsIndex, setSpecsIndex] = useState<SpecsIndex | null>(null);
   const [specsIndexError, setSpecsIndexError] = useState<string | null>(null);
+  const [specDetail, setSpecDetail] = useState<StaticSpecDetail | null>(null);
+  const [specDetailError, setSpecDetailError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -171,7 +176,7 @@ function App() {
     }
 
     const SELECTOR =
-      ".doc-head h1, .doc-lede, .doc-prose, .doc-section h2, .doc-status__row, .doc-specs__entry, .doc-quote, .doc-error";
+      ".doc-head h1, .doc-lede, .doc-prose, .doc-section h2, .doc-status__row, .doc-specs__entry, .doc-detail, .doc-quote, .doc-error";
 
     let frame = 0;
 
@@ -205,7 +210,27 @@ function App() {
         cancelAnimationFrame(frame);
       }
     };
-  }, [runtimeStatus, runtimeEvent, runtimeError, specsIndex, specsIndexError]);
+  }, [
+    runtimeStatus,
+    runtimeEvent,
+    runtimeError,
+    specsIndex,
+    specsIndexError,
+    specDetail,
+    specDetailError,
+  ]);
+
+  async function selectSpecDetail(specId: string) {
+    try {
+      const detail = await invoke<StaticSpecDetail>("get_static_spec_detail", {
+        specId,
+      });
+      setSpecDetail(detail);
+      setSpecDetailError(null);
+    } catch (error) {
+      setSpecDetailError(formatSpecDetailError(error));
+    }
+  }
 
   async function submitCommand(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -227,6 +252,11 @@ function App() {
       );
 
       if (isHandledRoute(commandRoute)) {
+        const specId = handledSpecDetailId(commandRoute);
+        if (specId) {
+          await selectSpecDetail(specId);
+        }
+
         const targetId = routeTargetElementId(commandRoute.target);
         const target = targetId ? document.getElementById(targetId) : null;
 
@@ -264,6 +294,9 @@ function App() {
           </a>
           <a className="doc-nav__link" href="#specs">
             Specs
+          </a>
+          <a className="doc-nav__link" href="#spec-detail">
+            Spec detail
           </a>
           <a className="doc-nav__link" href="#event-stream">
             Event stream
@@ -325,6 +358,15 @@ function App() {
                         <dd>{spec.route}</dd>
                       </div>
                     </dl>
+                    <button
+                      type="button"
+                      className="doc-specs__select"
+                      aria-label={`Select ${spec.specId} ${spec.title}`}
+                      aria-pressed={specDetail?.specId === spec.specId}
+                      onClick={() => selectSpecDetail(spec.specId)}
+                    >
+                      View detail
+                    </button>
                   </li>
                 ))}
               </ol>
@@ -339,6 +381,63 @@ function App() {
               Loading the static specs index…
             </p>
           )}
+        </section>
+
+        <section className="doc-section" id="spec-detail">
+          <h2>Spec detail</h2>
+          {specDetailError ? (
+            <div className="doc-error" role="status">
+              <strong>Spec detail unavailable</strong>
+              <span>{specDetailError}</span>
+            </div>
+          ) : null}
+          {specDetail ? (
+            <article className="doc-detail">
+              <div className="doc-specs__head">
+                <span>{specDetail.specId}</span>
+                <em>{specDetail.status}</em>
+              </div>
+              <h3>{specDetail.title}</h3>
+              <p className="doc-prose">{specDetail.summary}</p>
+              <dl className="doc-specs__meta">
+                <div>
+                  <dt>path</dt>
+                  <dd>{specDetail.path}</dd>
+                </div>
+                <div>
+                  <dt>branch</dt>
+                  <dd>{specDetail.implementationBranch}</dd>
+                </div>
+                <div>
+                  <dt>route</dt>
+                  <dd>{specDetail.route}</dd>
+                </div>
+              </dl>
+              <div className="doc-detail__lists">
+                <div>
+                  <h4>Scope</h4>
+                  <ul>
+                    {specDetail.scope.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h4>Limitations</h4>
+                  <ul>
+                    {specDetail.limitations.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </article>
+          ) : !specDetailError ? (
+            <p className="doc-prose doc-prose--muted" role="status">
+              Select a spec from the index or run /specs/&lt;id&gt; to see its
+              static detail.
+            </p>
+          ) : null}
         </section>
 
         <section className="doc-section" id="runtime-status">

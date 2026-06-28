@@ -58,6 +58,30 @@ export function formatSpecsIndexSource(index: SpecsIndex) {
   return `${index.artifactType} · ${index.generatedFrom}`;
 }
 
+export function formatSpecDetailError(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return "Spec detail is unavailable.";
+}
+
+export type StaticSpecDetail = {
+  specId: string;
+  title: string;
+  status: string;
+  path: string;
+  implementationBranch: string;
+  route: string;
+  summary: string;
+  scope: string[];
+  limitations: string[];
+};
+
 export type ParsedCommandKind =
   | "navigate"
   | "ask"
@@ -82,6 +106,7 @@ export type RouteDisposition = "handled" | "unsupported" | "blocked" | "empty";
 export type RouteTarget =
   | "summary"
   | "specs"
+  | "spec-detail"
   | "runtime-status"
   | "event-stream"
   | "phase"
@@ -92,6 +117,7 @@ export type CommandRoute = {
   disposition: RouteDisposition;
   target: RouteTarget;
   message: string;
+  resource?: string;
 };
 
 export const MAX_COMMAND_LOG_ENTRIES = 20;
@@ -130,6 +156,14 @@ export function routeTargetElementId(target: RouteTarget) {
 
 export function isHandledRoute(route: CommandRoute) {
   return route.disposition === "handled" && route.target !== "none";
+}
+
+export function handledSpecDetailId(route: CommandRoute) {
+  return route.disposition === "handled" &&
+    route.target === "spec-detail" &&
+    route.resource
+    ? route.resource
+    : null;
 }
 
 export type SpreadConfig = {
