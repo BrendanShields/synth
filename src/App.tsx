@@ -111,6 +111,20 @@ const statusRows: Array<{
 
 function App() {
   const [phase, setPhase] = useState<RuntimePhase>("loading");
+  const [autonomyMode, setAutonomyMode] = useState("supervised");
+
+  async function toggleAutonomy() {
+    const next =
+      autonomyMode === "supervised" ? "high_autonomy" : "supervised";
+    try {
+      const result = await invoke<{ mode: string }>("set_autonomy_mode", {
+        mode: next,
+      });
+      setAutonomyMode(result.mode);
+    } catch {
+      /* keep the current mode on failure */
+    }
+  }
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null);
   const [runtimeEvent, setRuntimeEvent] = useState<RuntimeEvent | null>(null);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
@@ -513,6 +527,12 @@ function App() {
     return () => {
       active = false;
     };
+  }, []);
+
+  useEffect(() => {
+    invoke<{ mode: string }>("get_autonomy_mode")
+      .then((result) => setAutonomyMode(result.mode))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1386,6 +1406,15 @@ function App() {
           ) : null}
         </div>
         <div className="doc-foot__keys">
+          <button
+            type="button"
+            className="doc-foot__autonomy"
+            data-mode={autonomyMode}
+            aria-label={`Autonomy mode ${formatLabel(autonomyMode)}; toggle`}
+            onClick={toggleAutonomy}
+          >
+            {formatLabel(autonomyMode)}
+          </button>
           <span>
             <kbd>⌘F</kbd> find
           </span>
