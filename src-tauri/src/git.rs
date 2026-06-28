@@ -3,6 +3,7 @@ use serde::Serialize;
 use crate::workspace::WorkspaceState;
 
 const MAX_CHANGES: usize = 200;
+const MAX_LOG: usize = 20;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,6 +84,62 @@ pub fn git_status(state: tauri::State<'_, WorkspaceState>) -> Result<GitStatus, 
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommit {
+    pub short: String,
+    pub subject: String,
+}
+
+pub fn parse_log(output: &str) -> Vec<GitCommit> {
+    output
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .take(MAX_LOG)
+        .filter_map(|line| {
+            line.split_once(' ').map(|(short, subject)| GitCommit {
+                short: short.to_string(),
+                subject: subject.to_string(),
+            })
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub fn git_log(state: tauri::State<'_, WorkspaceState>) -> Result<Vec<GitCommit>, String> {
+    let root = {
+        let guard = state.0.lock().expect("workspace state lock poisoned");
+        guard.as_ref().ok_or("No workspace is open.")?.root.clone()
+    };
+
+    let output = std::process::Command::new("git")
+        .current_dir(&root)
+        .args([
+            "log",
+            &format!("--max-count={MAX_LOG}"),
+            "--pretty=format:%h %s",
+        ])
+        .output()
+        .map_err(|error| format!("Could not run git: {error}"))?;
+
+    if output.status.success() {
+        return Ok(parse_log(&String::from_utf8_lossy(&output.stdout)));
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).to_lowercase();
+    if stderr.contains("not a git repository")
+        || stderr.contains("does not have any commits")
+        || stderr.contains("bad default revision")
+    {
+        Ok(Vec::new())
+    } else {
+        Err(format!(
+            "git failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,6 +174,35 @@ mod tests {
             input.push_str(&format!("?? file{index}.txt\n"));
         }
         assert_eq!(parse_status(&input).changes.len(), MAX_CHANGES);
+    }
+
+    #[test]
+    fn parses_log_lines_and_skips_malformed() {
+        let commits = parse_log("abc1234 first commit\ndef5678 fix: bug in parser\n\nbadline\n");
+        assert_eq!(commits.len(), 2);
+        assert_eq!(commits[0].short, "abc1234");
+        assert_eq!(commits[0].subject, "first commit");
+        assert_eq!(commits[1].subject, "fix: bug in parser");
+    }
+
+    #[test]
+    fn caps_the_log() {
+        let mut input = String::new();
+        for index in 0..(MAX_LOG + 10) {
+            input.push_str(&format!("hash{index} subject {index}\n"));
+        }
+        assert_eq!(parse_log(&input).len(), MAX_LOG);
+    }
+
+    #[test]
+    fn serializes_commit_in_camel_case() {
+        let serialized = serde_json::to_value(GitCommit {
+            short: "abc1234".to_string(),
+            subject: "hello".to_string(),
+        })
+        .unwrap();
+        assert_eq!(serialized["short"], "abc1234");
+        assert_eq!(serialized["subject"], "hello");
     }
 
     #[test]

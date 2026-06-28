@@ -71,6 +71,11 @@ type WorkspaceSpec = {
   path: string;
 };
 
+type GitCommit = {
+  short: string;
+  subject: string;
+};
+
 type RuntimePhase = "loading" | "ready" | "runtime-unavailable";
 
 const RUNTIME_STATUS_EVENT = "synth-runtime-status";
@@ -122,6 +127,7 @@ function App() {
   const [docError, setDocError] = useState<string | null>(null);
   const [workspaceSpecs, setWorkspaceSpecs] = useState<WorkspaceSpec[]>([]);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
+  const [gitLog, setGitLog] = useState<GitCommit[]>([]);
 
   async function viewDoc(kind: string) {
     try {
@@ -155,6 +161,11 @@ function App() {
       setGitStatus(await invoke<GitStatus>("git_status"));
     } catch {
       setGitStatus(null);
+    }
+    try {
+      setGitLog(await invoke<GitCommit[]>("git_log"));
+    } catch {
+      setGitLog([]);
     }
   }
 
@@ -644,6 +655,19 @@ function App() {
               {workspaceSpecs.map((spec) => (
                 <li className="doc-events__entry" key={spec.specId}>
                   {spec.specId} · {spec.path}
+                </li>
+              ))}
+            </ol>
+          </section>
+        ) : null}
+
+        {workspace && gitLog.length > 0 ? (
+          <section className="doc-section" id="git-log">
+            <h2>Recent commits</h2>
+            <ol className="doc-events" aria-label="Recent commits">
+              {gitLog.map((commit) => (
+                <li className="doc-events__entry" key={commit.short}>
+                  {commit.short} · {commit.subject}
                 </li>
               ))}
             </ol>
