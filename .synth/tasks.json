@@ -80,7 +80,19 @@
     },
     {
       "id": "FS-020",
-      "title": "Approval-gated branch switch",
+      "title": "Approval-gated branch switch"
+    },
+    {
+      "id": "FS-021",
+      "title": "Approval-gated push"
+    },
+    {
+      "id": "FS-022",
+      "title": "Approval-gated pull request creation"
+    },
+    {
+      "id": "FS-023",
+      "title": "Request classification",
       "planned": true
     }
   ]
