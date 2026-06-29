@@ -184,8 +184,7 @@
     },
     {
       "id": "FS-046",
-      "title": "Extension permission scope",
-      "planned": true
+      "title": "Extension permission scope"
     }
   ]
 }
