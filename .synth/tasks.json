@@ -152,7 +152,15 @@
     },
     {
       "id": "FS-038",
-      "title": "Workflow definitions",
+      "title": "Workflow definitions"
+    },
+    {
+      "id": "FS-039",
+      "title": "Knowledge capture"
+    },
+    {
+      "id": "FS-040",
+      "title": "App identity and version surfacing",
       "planned": true
     }
   ]
