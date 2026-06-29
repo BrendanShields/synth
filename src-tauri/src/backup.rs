@@ -105,6 +105,7 @@ mod tests {
                 name: "rg".to_string(),
                 kind: "tool".to_string(),
                 command: "rg --version".to_string(),
+                scope: "read".to_string(),
             }],
             vec![Workflow {
                 id: 0,

@@ -3,6 +3,10 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
+fn default_scope() -> String {
+    "read".to_string()
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Extension {
@@ -10,10 +14,16 @@ pub struct Extension {
     pub name: String,
     pub kind: String,
     pub command: String,
+    #[serde(default = "default_scope")]
+    pub scope: String,
 }
 
 pub fn is_valid_extension_kind(kind: &str) -> bool {
     matches!(kind, "tool" | "mcp" | "skill")
+}
+
+pub fn is_valid_extension_scope(scope: &str) -> bool {
+    matches!(scope, "read" | "write" | "network" | "shell")
 }
 
 pub fn load_registry(path: &Path) -> Vec<Extension> {
@@ -46,6 +56,7 @@ pub fn register_extension(
     name: String,
     kind: String,
     command: String,
+    scope: String,
 ) -> Result<Extension, String> {
     let name = name.trim();
     let command = command.trim();
@@ -54,6 +65,9 @@ pub fn register_extension(
     }
     if !is_valid_extension_kind(&kind) {
         return Err("Extension kind must be tool, mcp, or skill.".to_string());
+    }
+    if !is_valid_extension_scope(&scope) {
+        return Err("Extension scope must be read, write, network, or shell.".to_string());
     }
     if command.is_empty() || command.len() > 2000 {
         return Err("Invalid extension command.".to_string());
@@ -67,6 +81,7 @@ pub fn register_extension(
         name: name.to_string(),
         kind,
         command: command.to_string(),
+        scope,
     };
     extensions.push(extension.clone());
     save_registry(&path, &extensions)?;
@@ -111,6 +126,28 @@ mod tests {
     }
 
     #[test]
+    fn validates_scope() {
+        for scope in ["read", "write", "network", "shell"] {
+            assert!(is_valid_extension_scope(scope));
+        }
+        assert!(!is_valid_extension_scope("admin"));
+        assert!(!is_valid_extension_scope(""));
+    }
+
+    #[test]
+    fn scope_defaults_to_read_for_pre_scope_registries() {
+        let path = temp_path("legacy");
+        std::fs::write(
+            &path,
+            r#"[{"id":0,"name":"rg","kind":"tool","command":"rg"}]"#,
+        )
+        .unwrap();
+        let loaded = load_registry(&path);
+        assert_eq!(loaded[0].scope, "read");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
     fn missing_or_malformed_registry_loads_empty() {
         assert!(load_registry(Path::new("/no/such/synth/extensions.json")).is_empty());
         let path = temp_path("malformed");
@@ -132,6 +169,7 @@ mod tests {
             name: "ripgrep".to_string(),
             kind: "tool".to_string(),
             command: "rg --version".to_string(),
+            scope: "read".to_string(),
         });
         save_registry(&path, &registry).unwrap();
 
@@ -153,10 +191,12 @@ mod tests {
             name: "fmt".to_string(),
             kind: "tool".to_string(),
             command: "cargo fmt".to_string(),
+            scope: "shell".to_string(),
         })
         .unwrap();
         assert_eq!(serialized["id"], 2);
         assert_eq!(serialized["kind"], "tool");
         assert_eq!(serialized["command"], "cargo fmt");
+        assert_eq!(serialized["scope"], "shell");
     }
 }
