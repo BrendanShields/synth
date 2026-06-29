@@ -161,6 +161,11 @@
     {
       "id": "FS-040",
       "title": "App identity and version surfacing"
+    },
+    {
+      "id": "FS-041",
+      "title": "State export",
+      "planned": true
     }
   ]
 }
