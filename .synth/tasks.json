@@ -180,7 +180,11 @@
     },
     {
       "id": "FS-045",
-      "title": "State import",
+      "title": "State import"
+    },
+    {
+      "id": "FS-046",
+      "title": "Extension permission scope",
       "planned": true
     }
   ]
