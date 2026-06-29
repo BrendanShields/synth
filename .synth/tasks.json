@@ -200,7 +200,11 @@
     },
     {
       "id": "FS-050",
-      "title": "Extension run observability",
+      "title": "Extension run observability"
+    },
+    {
+      "id": "FS-051",
+      "title": "Adversarial requirements review",
       "planned": true
     }
   ]
