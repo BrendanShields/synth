@@ -133,6 +133,19 @@
     {
       "id": "FS-033",
       "title": "High-autonomy auto-approval"
+    },
+    {
+      "id": "FS-034",
+      "title": "Model-assisted diff review"
+    },
+    {
+      "id": "FS-035",
+      "title": "Approval-gated command execution"
+    },
+    {
+      "id": "FS-036",
+      "title": "Improvement signals",
+      "planned": true
     }
   ]
 }
