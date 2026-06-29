@@ -11,6 +11,7 @@ mod roles;
 mod runtime_status;
 mod signals;
 mod specs_index;
+mod workflows;
 mod workspace;
 
 use approvals::{
@@ -32,6 +33,7 @@ use roles::{get_model_roles, set_model_role, ModelRolesState};
 use signals::improvement_signals;
 use runtime_status::{announce_runtime_status, get_runtime_status};
 use specs_index::{get_static_spec_detail, list_specs_index};
+use workflows::{list_workflows, remove_workflow, save_workflow};
 use workspace::{
     get_workspace, inspect_planning_baseline, list_workspace_specs, open_workspace,
     read_workspace_doc, WorkspaceState,
@@ -91,7 +93,10 @@ pub fn run() {
             improvement_signals,
             register_extension,
             list_extensions,
-            remove_extension
+            remove_extension,
+            save_workflow,
+            list_workflows,
+            remove_workflow
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

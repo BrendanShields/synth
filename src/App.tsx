@@ -165,6 +165,53 @@ function App() {
   const [extKind, setExtKind] = useState("tool");
   const [extCommand, setExtCommand] = useState("");
   const [extError, setExtError] = useState<string | null>(null);
+  const [workflows, setWorkflows] = useState<
+    Array<{ id: number; name: string; steps: string[] }>
+  >([]);
+  const [wfName, setWfName] = useState("");
+  const [wfSteps, setWfSteps] = useState("");
+  const [wfError, setWfError] = useState<string | null>(null);
+
+  async function refreshWorkflows() {
+    try {
+      setWorkflows(
+        await invoke<Array<{ id: number; name: string; steps: string[] }>>(
+          "list_workflows",
+        ),
+      );
+    } catch {
+      setWorkflows([]);
+    }
+  }
+
+  async function saveWorkflow() {
+    setWfError(null);
+    const steps = wfSteps
+      .split("\n")
+      .map((step) => step.trim())
+      .filter(Boolean);
+    try {
+      await invoke("save_workflow", { name: wfName, steps });
+      setWfName("");
+      setWfSteps("");
+      await refreshWorkflows();
+    } catch (error) {
+      setWfError(
+        error instanceof Error ? error.message : "Could not save workflow.",
+      );
+    }
+  }
+
+  async function removeWorkflow(id: number) {
+    try {
+      await invoke("remove_workflow", { id });
+      await refreshWorkflows();
+    } catch (error) {
+      setWfError(
+        error instanceof Error ? error.message : "Could not remove workflow.",
+      );
+    }
+  }
 
   async function refreshExtensions() {
     try {
@@ -741,6 +788,7 @@ function App() {
       .catch(() => {});
     void refreshModelRoles();
     void refreshExtensions();
+    void refreshWorkflows();
     invoke<SessionEvent[]>("load_events", { limit: 50 })
       .then((records) => {
         if (records.length) {
@@ -1731,6 +1779,65 @@ function App() {
                   >
                     Remove
                   </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+
+        <section className="doc-section" id="workflows">
+          <h2>Workflows</h2>
+          <div className="doc-control">
+            <input
+              aria-label="Workflow name"
+              placeholder="name"
+              value={wfName}
+              spellCheck={false}
+              autoComplete="off"
+              onChange={(event) => setWfName(event.target.value)}
+            />
+            <textarea
+              aria-label="Workflow steps"
+              placeholder="one command per line"
+              value={wfSteps}
+              spellCheck={false}
+              autoComplete="off"
+              rows={3}
+              onChange={(event) => setWfSteps(event.target.value)}
+            />
+            <button type="button" onClick={saveWorkflow}>
+              Save
+            </button>
+          </div>
+          {wfError ? (
+            <p className="doc-workspace__notice doc-prose--mono">{wfError}</p>
+          ) : null}
+          {workflows.length > 0 ? (
+            <ul className="doc-workflows" aria-label="Workflows">
+              {workflows.map((workflow) => (
+                <li className="doc-workflows__item" key={workflow.id}>
+                  <div className="doc-workflows__head">
+                    <span className="doc-workflows__name">{workflow.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => void removeWorkflow(workflow.id)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <ol className="doc-workflows__steps">
+                    {workflow.steps.map((step, index) => (
+                      <li key={index}>
+                        <code>{step}</code>
+                        <button
+                          type="button"
+                          onClick={() => void requestRunCommand(step)}
+                        >
+                          Run
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
                 </li>
               ))}
             </ul>

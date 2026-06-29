@@ -871,6 +871,47 @@ input {
   overflow-wrap: anywhere;
 }
 
+.doc-workflows {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 14px;
+}
+
+.doc-workflows__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.doc-workflows__name {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.doc-workflows__steps {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--ink-faint);
+}
+
+.doc-workflows__steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.doc-workflows__steps code {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
 .doc-signals {
   margin: 14px 0 0;
   padding: 0;
