@@ -4,6 +4,7 @@ use std::sync::Mutex;
 
 use serde::Serialize;
 
+use crate::autonomy::AutonomyState;
 use crate::git;
 use crate::workspace::WorkspaceState;
 
@@ -14,6 +15,15 @@ pub struct ApprovalRequest {
     pub action: String,
     pub summary: String,
     pub command: String,
+    pub auto_approve: bool,
+}
+
+pub fn auto_approves(action: &str, mode: &str) -> bool {
+    mode == "high_autonomy"
+        && matches!(
+            action,
+            "create-branch" | "switch-branch" | "commit" | "save-spec"
+        )
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -100,6 +110,7 @@ impl ApprovalInner {
             .insert(id, PendingAction::CreateBranch(name.to_string()));
         ApprovalRequest {
             id,
+            auto_approve: false,
             action: "create-branch".to_string(),
             summary: format!("Create branch {name}"),
             command: format!("git branch {name}"),
@@ -113,6 +124,7 @@ impl ApprovalInner {
             .insert(id, PendingAction::Commit(message.to_string()));
         ApprovalRequest {
             id,
+            auto_approve: false,
             action: "commit".to_string(),
             summary: format!("Commit: {message}"),
             command: format!("git add -A && git commit -m \"{message}\""),
@@ -126,6 +138,7 @@ impl ApprovalInner {
             .insert(id, PendingAction::SwitchBranch(name.to_string()));
         ApprovalRequest {
             id,
+            auto_approve: false,
             action: "switch-branch".to_string(),
             summary: format!("Switch to branch {name}"),
             command: format!("git switch {name}"),
@@ -139,6 +152,7 @@ impl ApprovalInner {
             .insert(id, PendingAction::Push(remote.to_string()));
         ApprovalRequest {
             id,
+            auto_approve: false,
             action: "push".to_string(),
             summary: format!("Push current branch to {remote}"),
             command: format!("git push -u {remote} HEAD"),
@@ -157,6 +171,7 @@ impl ApprovalInner {
         );
         ApprovalRequest {
             id,
+            auto_approve: false,
             action: "create-pr".to_string(),
             summary: format!("Open pull request: {title}"),
             command: format!(
@@ -179,6 +194,7 @@ impl ApprovalInner {
         );
         ApprovalRequest {
             id,
+            auto_approve: false,
             action: "save-spec".to_string(),
             summary: format!("Save spec {spec_id}"),
             command: format!("write {path}"),
@@ -204,6 +220,7 @@ impl ApprovalInner {
         );
         ApprovalRequest {
             id,
+            auto_approve: false,
             action: "save-amendment".to_string(),
             summary: format!("Save amendment {amendment_id} for {spec_id}"),
             command: format!("write {path}"),
@@ -219,6 +236,7 @@ impl ApprovalInner {
 pub fn request_create_branch(
     approvals: tauri::State<'_, ApprovalState>,
     workspace: tauri::State<'_, WorkspaceState>,
+    autonomy: tauri::State<'_, AutonomyState>,
     name: String,
 ) -> Result<ApprovalRequest, String> {
     if !is_valid_branch_name(&name) {
@@ -233,17 +251,25 @@ pub fn request_create_branch(
         return Err("No workspace is open.".to_string());
     }
 
-    Ok(approvals
+    let mode = autonomy
+        .0
+        .lock()
+        .expect("autonomy state lock poisoned")
+        .clone();
+    let mut request = approvals
         .0
         .lock()
         .expect("approval state lock poisoned")
-        .record_branch(&name))
+        .record_branch(&name);
+    request.auto_approve = auto_approves(&request.action, &mode);
+    Ok(request)
 }
 
 #[tauri::command]
 pub fn request_commit(
     approvals: tauri::State<'_, ApprovalState>,
     workspace: tauri::State<'_, WorkspaceState>,
+    autonomy: tauri::State<'_, AutonomyState>,
     message: String,
 ) -> Result<ApprovalRequest, String> {
     if !is_valid_commit_message(&message) {
@@ -258,17 +284,25 @@ pub fn request_commit(
         return Err("No workspace is open.".to_string());
     }
 
-    Ok(approvals
+    let mode = autonomy
+        .0
+        .lock()
+        .expect("autonomy state lock poisoned")
+        .clone();
+    let mut request = approvals
         .0
         .lock()
         .expect("approval state lock poisoned")
-        .record_commit(&message))
+        .record_commit(&message);
+    request.auto_approve = auto_approves(&request.action, &mode);
+    Ok(request)
 }
 
 #[tauri::command]
 pub fn request_switch_branch(
     approvals: tauri::State<'_, ApprovalState>,
     workspace: tauri::State<'_, WorkspaceState>,
+    autonomy: tauri::State<'_, AutonomyState>,
     name: String,
 ) -> Result<ApprovalRequest, String> {
     if !is_valid_branch_name(&name) {
@@ -283,17 +317,25 @@ pub fn request_switch_branch(
         return Err("No workspace is open.".to_string());
     }
 
-    Ok(approvals
+    let mode = autonomy
+        .0
+        .lock()
+        .expect("autonomy state lock poisoned")
+        .clone();
+    let mut request = approvals
         .0
         .lock()
         .expect("approval state lock poisoned")
-        .record_switch_branch(&name))
+        .record_switch_branch(&name);
+    request.auto_approve = auto_approves(&request.action, &mode);
+    Ok(request)
 }
 
 #[tauri::command]
 pub fn request_push(
     approvals: tauri::State<'_, ApprovalState>,
     workspace: tauri::State<'_, WorkspaceState>,
+    autonomy: tauri::State<'_, AutonomyState>,
     remote: String,
 ) -> Result<ApprovalRequest, String> {
     let remote = {
@@ -316,17 +358,25 @@ pub fn request_push(
         return Err("No workspace is open.".to_string());
     }
 
-    Ok(approvals
+    let mode = autonomy
+        .0
+        .lock()
+        .expect("autonomy state lock poisoned")
+        .clone();
+    let mut request = approvals
         .0
         .lock()
         .expect("approval state lock poisoned")
-        .record_push(&remote))
+        .record_push(&remote);
+    request.auto_approve = auto_approves(&request.action, &mode);
+    Ok(request)
 }
 
 #[tauri::command]
 pub fn request_save_spec(
     approvals: tauri::State<'_, ApprovalState>,
     workspace: tauri::State<'_, WorkspaceState>,
+    autonomy: tauri::State<'_, AutonomyState>,
     spec_id: String,
     content: String,
 ) -> Result<ApprovalRequest, String> {
@@ -344,17 +394,25 @@ pub fn request_save_spec(
         return Err("No workspace is open.".to_string());
     }
 
-    Ok(approvals
+    let mode = autonomy
+        .0
+        .lock()
+        .expect("autonomy state lock poisoned")
+        .clone();
+    let mut request = approvals
         .0
         .lock()
         .expect("approval state lock poisoned")
-        .record_save_spec(&canonical, &content))
+        .record_save_spec(&canonical, &content);
+    request.auto_approve = auto_approves(&request.action, &mode);
+    Ok(request)
 }
 
 #[tauri::command]
 pub fn request_save_amendment(
     approvals: tauri::State<'_, ApprovalState>,
     workspace: tauri::State<'_, WorkspaceState>,
+    autonomy: tauri::State<'_, AutonomyState>,
     spec_id: String,
     amendment_id: String,
     content: String,
@@ -374,17 +432,25 @@ pub fn request_save_amendment(
         return Err("No workspace is open.".to_string());
     }
 
-    Ok(approvals
+    let mode = autonomy
+        .0
+        .lock()
+        .expect("autonomy state lock poisoned")
+        .clone();
+    let mut request = approvals
         .0
         .lock()
         .expect("approval state lock poisoned")
-        .record_save_amendment(&spec, &amendment, &content))
+        .record_save_amendment(&spec, &amendment, &content);
+    request.auto_approve = auto_approves(&request.action, &mode);
+    Ok(request)
 }
 
 #[tauri::command]
 pub fn request_create_pr(
     approvals: tauri::State<'_, ApprovalState>,
     workspace: tauri::State<'_, WorkspaceState>,
+    autonomy: tauri::State<'_, AutonomyState>,
     title: String,
     body: String,
 ) -> Result<ApprovalRequest, String> {
@@ -403,17 +469,25 @@ pub fn request_create_pr(
         return Err("No workspace is open.".to_string());
     }
 
-    Ok(approvals
+    let mode = autonomy
+        .0
+        .lock()
+        .expect("autonomy state lock poisoned")
+        .clone();
+    let mut request = approvals
         .0
         .lock()
         .expect("approval state lock poisoned")
-        .record_create_pr(&title, &body))
+        .record_create_pr(&title, &body);
+    request.auto_approve = auto_approves(&request.action, &mode);
+    Ok(request)
 }
 
 #[tauri::command]
 pub fn resolve_approval(
     approvals: tauri::State<'_, ApprovalState>,
     workspace: tauri::State<'_, WorkspaceState>,
+    autonomy: tauri::State<'_, AutonomyState>,
     id: u64,
     approved: bool,
 ) -> Result<ApprovalOutcome, String> {
@@ -513,6 +587,17 @@ pub fn resolve_approval(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn auto_approves_only_low_risk_local_actions_in_high_autonomy() {
+        for action in ["create-branch", "switch-branch", "commit", "save-spec"] {
+            assert!(auto_approves(action, "high_autonomy"), "{action} should auto-approve");
+            assert!(!auto_approves(action, "supervised"), "{action} must prompt when supervised");
+        }
+        for action in ["push", "create-pr", "save-amendment"] {
+            assert!(!auto_approves(action, "high_autonomy"), "{action} must never auto-approve");
+        }
+    }
 
     #[test]
     fn accepts_valid_branch_names() {
@@ -687,10 +772,12 @@ mod tests {
             action: "create-branch".to_string(),
             summary: "Create branch x".to_string(),
             command: "git branch x".to_string(),
+            auto_approve: false,
         })
         .unwrap();
         assert_eq!(request["id"], 3);
         assert_eq!(request["command"], "git branch x");
+        assert_eq!(request["autoApprove"], false);
 
         let outcome = serde_json::to_value(ApprovalOutcome {
             id: 3,
