@@ -347,6 +347,7 @@ pub fn build_spec_prompt_for_request(request: &str) -> String {
 #[tauri::command]
 pub async fn draft_spec(
     state: tauri::State<'_, ProviderState>,
+    roles: tauri::State<'_, crate::roles::ModelRolesState>,
     request: String,
 ) -> Result<SpecDraft, String> {
     if !spec_request_is_valid(&request) {
@@ -354,7 +355,13 @@ pub async fn draft_spec(
     }
 
     let trimmed = request.trim();
-    let config = current_config(&state);
+    let mut config = current_config(&state);
+    let overrides = roles
+        .0
+        .lock()
+        .expect("roles state lock poisoned")
+        .clone();
+    config.model = crate::roles::resolve_model_for_role("planner", &overrides, &config.model);
     let draft = generate(&config, &build_spec_prompt_for_request(trimmed)).await?;
 
     Ok(SpecDraft {

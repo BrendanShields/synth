@@ -4,6 +4,7 @@ mod classify;
 mod command_dock;
 mod git;
 mod provider;
+mod roles;
 mod runtime_status;
 mod specs_index;
 mod workspace;
@@ -21,6 +22,7 @@ use provider::{
     ask_model, ask_spec, ask_stream, draft_spec, get_provider_config, get_provider_status,
     set_provider_config, ProviderState,
 };
+use roles::{get_model_roles, set_model_role, ModelRolesState};
 use runtime_status::{announce_runtime_status, get_runtime_status};
 use specs_index::{get_static_spec_detail, list_specs_index};
 use workspace::{
@@ -39,6 +41,7 @@ pub fn run() {
         .manage(ApprovalState::default())
         .manage(AutonomyState::default())
         .manage(ProviderState::default())
+        .manage(ModelRolesState::default())
         .invoke_handler(tauri::generate_handler![
             get_runtime_status,
             announce_runtime_status,
@@ -71,7 +74,9 @@ pub fn run() {
             get_autonomy_mode,
             set_autonomy_mode,
             get_provider_config,
-            set_provider_config
+            set_provider_config,
+            get_model_roles,
+            set_model_role
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
