@@ -192,7 +192,11 @@
     },
     {
       "id": "FS-048",
-      "title": "Knowledge links",
+      "title": "Knowledge links"
+    },
+    {
+      "id": "FS-049",
+      "title": "Subagent definitions",
       "planned": true
     }
   ]
