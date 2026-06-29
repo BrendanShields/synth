@@ -23,7 +23,7 @@ use approvals::{
     request_switch_branch, resolve_approval, ApprovalState,
 };
 use autonomy::{get_autonomy_mode, set_autonomy_mode, AutonomyState};
-use backup::export_state;
+use backup::{export_state, import_state};
 use classify::classify_request;
 use command_dock::{parse_command, route_command};
 use events::{append_event, load_events};
@@ -111,7 +111,8 @@ pub fn run() {
             load_session_tree,
             replay_path,
             retrieve_knowledge,
-            ask_with_context
+            ask_with_context,
+            import_state
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

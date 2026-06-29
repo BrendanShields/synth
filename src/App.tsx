@@ -496,6 +496,24 @@ function App() {
       );
     }
   }
+
+  async function importState() {
+    try {
+      const summary = await invoke<{ extensions: number; workflows: number }>(
+        "import_state",
+      );
+      setExportNotice(
+        `Imported ${summary.extensions} extensions, ${summary.workflows} workflows`,
+      );
+      await refreshExtensions();
+      await refreshWorkflows();
+      recordEvent("command", "import", "imported state");
+    } catch (error) {
+      setExportNotice(
+        error instanceof Error ? error.message : "Could not import state.",
+      );
+    }
+  }
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [baseline, setBaseline] = useState<PlanningBaseline | null>(null);
@@ -2065,6 +2083,9 @@ function App() {
           <div className="doc-control">
             <button type="button" onClick={exportState}>
               Export state
+            </button>
+            <button type="button" onClick={importState}>
+              Import state
             </button>
             {exportNotice ? (
               <span className="doc-foot__version">{exportNotice}</span>
