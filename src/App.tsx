@@ -176,6 +176,42 @@ function App() {
   >([]);
   const [knSlug, setKnSlug] = useState("");
   const [knContent, setKnContent] = useState("");
+  const [knQuery, setKnQuery] = useState("");
+  const [knHits, setKnHits] = useState<
+    Array<{ slug: string; title: string; path: string; snippet: string }>
+  >([]);
+  const [knAnswer, setKnAnswer] = useState<string | null>(null);
+  const [knBusy, setKnBusy] = useState(false);
+
+  async function retrieveKnowledge() {
+    try {
+      setKnHits(
+        await invoke<
+          Array<{ slug: string; title: string; path: string; snippet: string }>
+        >("retrieve_knowledge", { query: knQuery, limit: 5 }),
+      );
+    } catch {
+      setKnHits([]);
+    }
+  }
+
+  async function askWithContext() {
+    setKnBusy(true);
+    setKnAnswer(null);
+    try {
+      const answer = await invoke<string>("ask_with_context", {
+        question: knQuery,
+      });
+      setKnAnswer(answer);
+      recordEvent("answer", "knowledge", "grounded answer");
+    } catch (error) {
+      setKnAnswer(
+        error instanceof Error ? error.message : "Could not ask with context.",
+      );
+    } finally {
+      setKnBusy(false);
+    }
+  }
 
   async function refreshKnowledge() {
     try {
@@ -1935,6 +1971,33 @@ function App() {
                 ))}
               </ul>
             ) : null}
+            <div className="doc-control">
+              <input
+                aria-label="Knowledge query"
+                placeholder="retrieve / ask"
+                value={knQuery}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => setKnQuery(event.target.value)}
+              />
+              <button type="button" onClick={retrieveKnowledge}>
+                Retrieve
+              </button>
+              <button type="button" onClick={askWithContext} disabled={knBusy}>
+                {knBusy ? "Asking…" : "Ask grounded"}
+              </button>
+            </div>
+            {knHits.length > 0 ? (
+              <ul className="doc-extensions" aria-label="Knowledge hits">
+                {knHits.map((hit) => (
+                  <li className="doc-extensions__row" key={hit.slug}>
+                    <span className="doc-extensions__name">{hit.title}</span>
+                    <span className="doc-extensions__command">{hit.snippet}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {knAnswer ? <p className="doc-prose">{knAnswer}</p> : null}
           </section>
         ) : null}
 
