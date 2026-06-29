@@ -197,6 +197,11 @@
     {
       "id": "FS-049",
       "title": "Subagent definitions"
+    },
+    {
+      "id": "FS-050",
+      "title": "Extension run observability",
+      "planned": true
     }
   ]
 }
