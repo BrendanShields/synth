@@ -160,8 +160,7 @@
     },
     {
       "id": "FS-040",
-      "title": "App identity and version surfacing",
-      "planned": true
+      "title": "App identity and version surfacing"
     }
   ]
 }
