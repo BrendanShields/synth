@@ -120,7 +120,19 @@
     },
     {
       "id": "FS-030",
-      "title": "Approval-gated amendment",
+      "title": "Approval-gated amendment"
+    },
+    {
+      "id": "FS-031",
+      "title": "Model-role assignment"
+    },
+    {
+      "id": "FS-032",
+      "title": "App-local event persistence"
+    },
+    {
+      "id": "FS-033",
+      "title": "High-autonomy auto-approval",
       "planned": true
     }
   ]
