@@ -29,7 +29,7 @@ use command_dock::{parse_command, route_command};
 use events::{append_event, load_events};
 use extensions::{list_extensions, register_extension, remove_extension};
 use git::{git_diff, git_log, git_status};
-use knowledge::{detect_knowledge_drift, retrieve_knowledge};
+use knowledge::{detect_knowledge_drift, knowledge_links, retrieve_knowledge};
 use provider::{
     ask_model, ask_spec, ask_stream, draft_spec, get_provider_config, get_provider_status,
     ask_with_context, review_diff, set_provider_config, ProviderState,
@@ -114,6 +114,7 @@ pub fn run() {
             retrieve_knowledge,
             ask_with_context,
             detect_knowledge_drift,
+            knowledge_links,
             import_state
         ])
         .run(tauri::generate_context!())

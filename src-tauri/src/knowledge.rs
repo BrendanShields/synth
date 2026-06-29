@@ -135,6 +135,59 @@ pub fn find_drift_in(root: &Path) -> Vec<DriftFinding> {
     findings
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteLink {
+    pub from: String,
+    pub to: String,
+    pub resolved: bool,
+}
+
+pub fn extract_note_links(content: &str) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut links = Vec::new();
+    let mut rest = content;
+    while let Some(open) = rest.find("[[") {
+        rest = &rest[open + 2..];
+        let Some(close) = rest.find("]]") else {
+            break;
+        };
+        let target = rest[..close].trim().to_string();
+        rest = &rest[close + 2..];
+        if !target.is_empty() && seen.insert(target.clone()) {
+            links.push(target);
+        }
+    }
+    links
+}
+
+pub fn links_in(docs: &[(KnowledgeNote, String)]) -> Vec<NoteLink> {
+    let slugs: HashSet<&str> = docs.iter().map(|(note, _)| note.slug.as_str()).collect();
+    let mut links = Vec::new();
+    for (note, content) in docs {
+        for target in extract_note_links(content) {
+            let resolved = slugs.contains(target.as_str());
+            links.push(NoteLink {
+                from: note.slug.clone(),
+                to: target,
+                resolved,
+            });
+        }
+    }
+    links
+}
+
+#[tauri::command]
+pub fn knowledge_links(
+    workspace: tauri::State<'_, WorkspaceState>,
+) -> Result<Vec<NoteLink>, String> {
+    let root = {
+        let guard = workspace.0.lock().expect("workspace state lock poisoned");
+        guard.as_ref().ok_or("No workspace is open.")?.root.clone()
+    };
+    Ok(links_in(&read_knowledge_in(Path::new(&root))))
+}
+
 #[tauri::command]
 pub fn detect_knowledge_drift(
     workspace: tauri::State<'_, WorkspaceState>,
@@ -252,6 +305,36 @@ mod tests {
         assert_eq!(findings[0].missing_path, "src/gone.rs");
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn extracts_trims_and_dedups_note_links() {
+        let links = extract_note_links("see [[routing-grammar]] and [[ misc ]] and [[]] and [[misc]]");
+        assert_eq!(links, vec!["routing-grammar".to_string(), "misc".to_string()]);
+    }
+
+    #[test]
+    fn resolves_links_against_the_note_set() {
+        let docs = vec![
+            doc("a", "Alpha", "links to [[b]] and [[ghost]]"),
+            doc("b", "Beta", "no links"),
+        ];
+        let links = links_in(&docs);
+        assert_eq!(links.len(), 2);
+        assert!(links.iter().any(|l| l.to == "b" && l.resolved));
+        assert!(links.iter().any(|l| l.to == "ghost" && !l.resolved));
+    }
+
+    #[test]
+    fn serializes_note_link_in_camel_case() {
+        let value = serde_json::to_value(NoteLink {
+            from: "a".to_string(),
+            to: "b".to_string(),
+            resolved: true,
+        })
+        .unwrap();
+        assert_eq!(value["from"], "a");
+        assert_eq!(value["resolved"], true);
     }
 
     #[test]
