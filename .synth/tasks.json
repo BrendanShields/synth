@@ -176,7 +176,11 @@
     },
     {
       "id": "FS-044",
-      "title": "Knowledge retrieval into context",
+      "title": "Knowledge retrieval into context"
+    },
+    {
+      "id": "FS-045",
+      "title": "State import",
       "planned": true
     }
   ]
