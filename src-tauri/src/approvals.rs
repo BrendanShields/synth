@@ -48,6 +48,7 @@ enum PendingAction {
         content: String,
     },
     RunCommand(String),
+    SaveKnowledge { slug: String, content: String },
 }
 
 #[derive(Default)]
@@ -224,6 +225,26 @@ impl ApprovalInner {
             auto_approve: false,
             action: "save-amendment".to_string(),
             summary: format!("Save amendment {amendment_id} for {spec_id}"),
+            command: format!("write {path}"),
+        }
+    }
+
+    fn record_save_knowledge(&mut self, slug: &str, content: &str) -> ApprovalRequest {
+        let id = self.next_id;
+        self.next_id += 1;
+        let path = format!("docs/knowledge/{slug}.md");
+        self.pending.insert(
+            id,
+            PendingAction::SaveKnowledge {
+                slug: slug.to_string(),
+                content: content.to_string(),
+            },
+        );
+        ApprovalRequest {
+            id,
+            auto_approve: false,
+            action: "save-knowledge".to_string(),
+            summary: format!("Save knowledge {slug}"),
             command: format!("write {path}"),
         }
     }
@@ -419,6 +440,43 @@ pub fn request_save_spec(
         .lock()
         .expect("approval state lock poisoned")
         .record_save_spec(&canonical, &content);
+    request.auto_approve = auto_approves(&request.action, &mode);
+    Ok(request)
+}
+
+#[tauri::command]
+pub fn request_save_knowledge(
+    approvals: tauri::State<'_, ApprovalState>,
+    workspace: tauri::State<'_, WorkspaceState>,
+    autonomy: tauri::State<'_, AutonomyState>,
+    slug: String,
+    content: String,
+) -> Result<ApprovalRequest, String> {
+    if !crate::workspace::is_valid_knowledge_slug(&slug) {
+        return Err("Invalid knowledge slug.".to_string());
+    }
+    if content.trim().is_empty() || content.len() > 100_000 {
+        return Err("Invalid knowledge content.".to_string());
+    }
+    if workspace
+        .0
+        .lock()
+        .expect("workspace state lock poisoned")
+        .is_none()
+    {
+        return Err("No workspace is open.".to_string());
+    }
+
+    let mode = autonomy
+        .0
+        .lock()
+        .expect("autonomy state lock poisoned")
+        .clone();
+    let mut request = approvals
+        .0
+        .lock()
+        .expect("approval state lock poisoned")
+        .record_save_knowledge(&slug, &content);
     request.auto_approve = auto_approves(&request.action, &mode);
     Ok(request)
 }
@@ -636,6 +694,14 @@ pub fn resolve_approval(
                 id,
                 approved: true,
                 message: output,
+            })
+        }
+        PendingAction::SaveKnowledge { slug, content } => {
+            let path = crate::workspace::write_knowledge_file(Path::new(&root), &slug, &content)?;
+            Ok(ApprovalOutcome {
+                id,
+                approved: true,
+                message: format!("Saved {path}."),
             })
         }
     }

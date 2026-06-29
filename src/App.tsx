@@ -171,6 +171,39 @@ function App() {
   const [wfName, setWfName] = useState("");
   const [wfSteps, setWfSteps] = useState("");
   const [wfError, setWfError] = useState<string | null>(null);
+  const [knowledge, setKnowledge] = useState<
+    Array<{ slug: string; title: string; path: string }>
+  >([]);
+  const [knSlug, setKnSlug] = useState("");
+  const [knContent, setKnContent] = useState("");
+
+  async function refreshKnowledge() {
+    try {
+      setKnowledge(
+        await invoke<Array<{ slug: string; title: string; path: string }>>(
+          "list_knowledge",
+        ),
+      );
+    } catch {
+      setKnowledge([]);
+    }
+  }
+
+  async function requestSaveKnowledge() {
+    try {
+      const request = await invoke<ApprovalRequest>("request_save_knowledge", {
+        slug: knSlug,
+        content: knContent,
+      });
+      setPendingApproval(request);
+      setApprovalNotice(null);
+      recordEvent("command", "approval", `requested ${request.command}`);
+    } catch (error) {
+      setApprovalNotice(
+        error instanceof Error ? error.message : "Could not capture knowledge.",
+      );
+    }
+  }
 
   async function refreshWorkflows() {
     try {
@@ -569,7 +602,10 @@ function App() {
         setAmendSpecId("");
         setAmendId("");
         setAmendContent("");
+        setKnSlug("");
+        setKnContent("");
         void refreshBaseline();
+        void refreshKnowledge();
       }
     } catch (error) {
       setPendingApproval(null);
@@ -649,6 +685,7 @@ function App() {
       setWorkspaceError(null);
       recordEvent("command", "workspace", `opened ${opened.name}`);
       void refreshBaseline();
+      void refreshKnowledge();
     } catch (error) {
       setWorkspaceError(
         error instanceof Error ? error.message : "Could not open workspace.",
@@ -789,6 +826,7 @@ function App() {
     void refreshModelRoles();
     void refreshExtensions();
     void refreshWorkflows();
+    void refreshKnowledge();
     invoke<SessionEvent[]>("load_events", { limit: 50 })
       .then((records) => {
         if (records.length) {
@@ -1784,6 +1822,44 @@ function App() {
             </ul>
           ) : null}
         </section>
+
+        {workspace ? (
+          <section className="doc-section" id="knowledge">
+            <h2>Knowledge</h2>
+            <div className="doc-control">
+              <input
+                aria-label="Knowledge slug"
+                placeholder="slug"
+                value={knSlug}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => setKnSlug(event.target.value)}
+              />
+              <textarea
+                aria-label="Knowledge content"
+                placeholder="# Title&#10;markdown body"
+                value={knContent}
+                spellCheck={false}
+                autoComplete="off"
+                rows={3}
+                onChange={(event) => setKnContent(event.target.value)}
+              />
+              <button type="button" onClick={requestSaveKnowledge}>
+                Capture
+              </button>
+            </div>
+            {knowledge.length > 0 ? (
+              <ul className="doc-extensions" aria-label="Knowledge notes">
+                {knowledge.map((note) => (
+                  <li className="doc-extensions__row" key={note.slug}>
+                    <span className="doc-extensions__name">{note.title}</span>
+                    <code className="doc-extensions__command">{note.path}</code>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
+        ) : null}
 
         <section className="doc-section" id="workflows">
           <h2>Workflows</h2>

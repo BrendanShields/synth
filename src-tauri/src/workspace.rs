@@ -264,6 +264,94 @@ pub fn list_workspace_specs(
     Ok(list_workspace_specs_in(Path::new(&workspace.root)))
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KnowledgeNote {
+    pub slug: String,
+    pub title: String,
+    pub path: String,
+}
+
+pub fn is_valid_knowledge_slug(slug: &str) -> bool {
+    !slug.is_empty()
+        && slug.len() <= 100
+        && slug
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+}
+
+pub fn knowledge_title_from(content: &str, slug: &str) -> String {
+    content
+        .lines()
+        .find_map(|line| line.strip_prefix("# ").map(|title| title.trim().to_string()))
+        .filter(|title| !title.is_empty())
+        .unwrap_or_else(|| slug.to_string())
+}
+
+pub fn write_knowledge_file(root: &Path, slug: &str, content: &str) -> Result<String, String> {
+    if !is_valid_knowledge_slug(slug) {
+        return Err("Invalid knowledge slug.".to_string());
+    }
+    let relative = format!("docs/knowledge/{slug}.md");
+    let target = root.join(&relative);
+
+    if !is_within_root(root, &target) {
+        return Err("Path escapes the workspace.".to_string());
+    }
+
+    let dir = target
+        .parent()
+        .ok_or("Could not resolve knowledge directory.")?;
+    std::fs::create_dir_all(dir)
+        .map_err(|error| format!("Cannot create knowledge directory: {error}"))?;
+    std::fs::write(&target, content).map_err(|error| format!("Cannot write knowledge: {error}"))?;
+    Ok(relative)
+}
+
+pub fn list_knowledge_in(root: &Path) -> Vec<KnowledgeNote> {
+    let dir = root.join("docs/knowledge");
+    if !is_within_root(root, &dir) {
+        return Vec::new();
+    }
+
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut notes = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+            continue;
+        }
+        let Some(slug) = path.file_stem().and_then(|stem| stem.to_str()) else {
+            continue;
+        };
+        if !is_valid_knowledge_slug(slug) {
+            continue;
+        }
+        let content = std::fs::read_to_string(&path).unwrap_or_default();
+        notes.push(KnowledgeNote {
+            slug: slug.to_string(),
+            title: knowledge_title_from(&content, slug),
+            path: format!("docs/knowledge/{slug}.md"),
+        });
+    }
+
+    notes.sort_by(|a, b| a.slug.cmp(&b.slug));
+    notes
+}
+
+#[tauri::command]
+pub fn list_knowledge(
+    state: tauri::State<'_, WorkspaceState>,
+) -> Result<Vec<KnowledgeNote>, String> {
+    let guard = state.0.lock().expect("workspace state lock poisoned");
+    let workspace = guard.as_ref().ok_or("No workspace is open.")?;
+    Ok(list_knowledge_in(Path::new(&workspace.root)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,6 +377,46 @@ mod tests {
             Path::new("/work/repo"),
             Path::new("/work/repo-secrets")
         ));
+    }
+
+    #[test]
+    fn validates_knowledge_slugs() {
+        assert!(is_valid_knowledge_slug("routing-grammar"));
+        assert!(is_valid_knowledge_slug("adr-0001-notes"));
+        assert!(!is_valid_knowledge_slug("Routing"));
+        assert!(!is_valid_knowledge_slug("a/b"));
+        assert!(!is_valid_knowledge_slug(".."));
+        assert!(!is_valid_knowledge_slug(""));
+    }
+
+    #[test]
+    fn derives_knowledge_title_from_first_heading_else_slug() {
+        assert_eq!(
+            knowledge_title_from("# Routing grammar\nbody", "routing"),
+            "Routing grammar"
+        );
+        assert_eq!(knowledge_title_from("no heading", "routing"), "routing");
+    }
+
+    #[test]
+    fn writes_and_lists_knowledge_confined_to_the_workspace() {
+        let root = std::env::temp_dir().join(format!("synth-fs039-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let path = write_knowledge_file(&root, "routing-grammar", "# Routing grammar\nx").unwrap();
+        assert_eq!(path, "docs/knowledge/routing-grammar.md");
+        assert!(root.join(&path).is_file());
+
+        let notes = list_knowledge_in(&root);
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].slug, "routing-grammar");
+        assert_eq!(notes[0].title, "Routing grammar");
+
+        assert!(write_knowledge_file(&root, "bad/slug", "x").is_err());
+        assert!(write_knowledge_file(&root, "..", "x").is_err());
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
