@@ -40,15 +40,25 @@ enum PendingAction {
     Commit(String),
     SwitchBranch(String),
     Push(String),
-    CreatePr { title: String, body: String },
-    SaveSpec { spec_id: String, content: String },
+    CreatePr {
+        title: String,
+        body: String,
+    },
+    SaveSpec {
+        spec_id: String,
+        content: String,
+    },
     SaveAmendment {
         spec_id: String,
         amendment_id: String,
         content: String,
     },
     RunCommand(String),
-    SaveKnowledge { slug: String, content: String },
+    RunExtension(crate::extensions::Extension),
+    SaveKnowledge {
+        slug: String,
+        content: String,
+    },
 }
 
 #[derive(Default)]
@@ -249,17 +259,23 @@ impl ApprovalInner {
         }
     }
 
-    fn record_run_extension(&mut self, command: &str, name: &str, scope: &str) -> ApprovalRequest {
+    fn record_run_extension(
+        &mut self,
+        extension: &crate::extensions::Extension,
+    ) -> ApprovalRequest {
         let id = self.next_id;
         self.next_id += 1;
         self.pending
-            .insert(id, PendingAction::RunCommand(command.to_string()));
+            .insert(id, PendingAction::RunExtension(extension.clone()));
         ApprovalRequest {
             id,
             auto_approve: false,
             action: "run-command".to_string(),
-            summary: format!("Run extension {name} ({scope}): {command}"),
-            command: command.to_string(),
+            summary: format!(
+                "Run extension {} ({}): {}",
+                extension.name, extension.scope, extension.command
+            ),
+            command: extension.command.clone(),
         }
     }
 
@@ -430,8 +446,7 @@ pub fn request_save_spec(
     spec_id: String,
     content: String,
 ) -> Result<ApprovalRequest, String> {
-    let canonical = crate::workspace::spec_id_from_dir_name(&spec_id)
-        .ok_or("Invalid spec id.")?;
+    let canonical = crate::workspace::spec_id_from_dir_name(&spec_id).ok_or("Invalid spec id.")?;
     if content.trim().is_empty() || content.len() > 100_000 {
         return Err("Invalid spec content.".to_string());
     }
@@ -522,11 +537,17 @@ pub fn request_run_extension(
         .lock()
         .expect("autonomy state lock poisoned")
         .clone();
+    crate::extensions::append_run_record(
+        &crate::extensions::extension_runs_path(&app)?,
+        &extension,
+        "requested",
+        "Approval requested.",
+    )?;
     let mut request = approvals
         .0
         .lock()
         .expect("approval state lock poisoned")
-        .record_run_extension(&extension.command, &extension.name, &extension.scope);
+        .record_run_extension(&extension);
     request.auto_approve = auto_approves(&request.action, &mode);
     Ok(request)
 }
@@ -642,9 +663,10 @@ pub fn request_create_pr(
 
 #[tauri::command]
 pub fn resolve_approval(
+    app: tauri::AppHandle,
     approvals: tauri::State<'_, ApprovalState>,
     workspace: tauri::State<'_, WorkspaceState>,
-    autonomy: tauri::State<'_, AutonomyState>,
+    _autonomy: tauri::State<'_, AutonomyState>,
     id: u64,
     approved: bool,
 ) -> Result<ApprovalOutcome, String> {
@@ -656,6 +678,14 @@ pub fn resolve_approval(
         .ok_or("Unknown or already-resolved approval.")?;
 
     if !approved {
+        if let PendingAction::RunExtension(extension) = &action {
+            crate::extensions::append_run_record(
+                &crate::extensions::extension_runs_path(&app)?,
+                extension,
+                "denied",
+                "Denied.",
+            )?;
+        }
         return Ok(ApprovalOutcome {
             id,
             approved: false,
@@ -746,6 +776,32 @@ pub fn resolve_approval(
                 message: output,
             })
         }
+        PendingAction::RunExtension(extension) => {
+            match crate::exec::run_command(Path::new(&root), &extension.command, 30, 8000) {
+                Ok(output) => {
+                    crate::extensions::append_run_record(
+                        &crate::extensions::extension_runs_path(&app)?,
+                        &extension,
+                        "succeeded",
+                        &output,
+                    )?;
+                    Ok(ApprovalOutcome {
+                        id,
+                        approved: true,
+                        message: output,
+                    })
+                }
+                Err(error) => {
+                    crate::extensions::append_run_record(
+                        &crate::extensions::extension_runs_path(&app)?,
+                        &extension,
+                        "failed",
+                        &error,
+                    )?;
+                    Err(error)
+                }
+            }
+        }
         PendingAction::SaveKnowledge { slug, content } => {
             let path = crate::workspace::write_knowledge_file(Path::new(&root), &slug, &content)?;
             Ok(ApprovalOutcome {
@@ -761,21 +817,41 @@ pub fn resolve_approval(
 mod tests {
     use super::*;
 
+    fn extension() -> crate::extensions::Extension {
+        crate::extensions::Extension {
+            id: 7,
+            name: "ripgrep".to_string(),
+            kind: "tool".to_string(),
+            command: "rg --version".to_string(),
+            scope: "shell".to_string(),
+        }
+    }
+
     #[test]
     fn auto_approves_only_low_risk_local_actions_in_high_autonomy() {
         for action in ["create-branch", "switch-branch", "commit", "save-spec"] {
-            assert!(auto_approves(action, "high_autonomy"), "{action} should auto-approve");
-            assert!(!auto_approves(action, "supervised"), "{action} must prompt when supervised");
+            assert!(
+                auto_approves(action, "high_autonomy"),
+                "{action} should auto-approve"
+            );
+            assert!(
+                !auto_approves(action, "supervised"),
+                "{action} must prompt when supervised"
+            );
         }
         for action in ["push", "create-pr", "save-amendment", "run-command"] {
-            assert!(!auto_approves(action, "high_autonomy"), "{action} must never auto-approve");
+            assert!(
+                !auto_approves(action, "high_autonomy"),
+                "{action} must never auto-approve"
+            );
         }
     }
 
     #[test]
     fn records_run_extension_with_scope_in_summary_and_no_auto_approve() {
         let mut inner = ApprovalInner::default();
-        let request = inner.record_run_extension("rg --version", "ripgrep", "shell");
+        let extension = extension();
+        let request = inner.record_run_extension(&extension);
 
         assert_eq!(request.action, "run-command");
         assert_eq!(request.command, "rg --version");
@@ -784,7 +860,7 @@ mod tests {
         assert!(request.summary.contains("shell"));
         assert_eq!(
             inner.take(request.id),
-            Some(PendingAction::RunCommand("rg --version".to_string()))
+            Some(PendingAction::RunExtension(extension))
         );
     }
 
@@ -811,7 +887,16 @@ mod tests {
 
     #[test]
     fn rejects_invalid_branch_names() {
-        for name in ["", "-rf", "has space", "a..b", "feature/", "/x", "a//b", "x\u{7}"] {
+        for name in [
+            "",
+            "-rf",
+            "has space",
+            "a..b",
+            "feature/",
+            "/x",
+            "a//b",
+            "x\u{7}",
+        ] {
             assert!(!is_valid_branch_name(name), "{name} should be invalid");
         }
     }
@@ -909,7 +994,10 @@ mod tests {
         let request = inner.record_save_amendment("FS-005", "AMD-001", "deviation");
 
         assert_eq!(request.action, "save-amendment");
-        assert_eq!(request.command, "write docs/specs/FS-005/amendments/AMD-001.md");
+        assert_eq!(
+            request.command,
+            "write docs/specs/FS-005/amendments/AMD-001.md"
+        );
         assert_eq!(
             inner.take(request.id),
             Some(PendingAction::SaveAmendment {
@@ -935,7 +1023,9 @@ mod tests {
         let request = inner.record_create_pr("Add feature", &body);
 
         assert_eq!(request.action, "create-pr");
-        assert!(request.command.starts_with("gh pr create --title \"Add feature\""));
+        assert!(request
+            .command
+            .starts_with("gh pr create --title \"Add feature\""));
         assert!(request.command.contains('…'));
         assert!(!request.command.contains('\n'));
         assert_eq!(
