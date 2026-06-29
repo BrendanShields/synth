@@ -393,6 +393,7 @@ function App() {
   const [signals, setSignals] = useState<
     Array<{ kind: string; summary: string; count: number }>
   >([]);
+  const [appVersion, setAppVersion] = useState("");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [baseline, setBaseline] = useState<PlanningBaseline | null>(null);
@@ -827,6 +828,9 @@ function App() {
     void refreshExtensions();
     void refreshWorkflows();
     void refreshKnowledge();
+    invoke<{ name: string; version: string }>("app_identity")
+      .then((identity) => setAppVersion(identity.version))
+      .catch(() => {});
     invoke<SessionEvent[]>("load_events", { limit: 50 })
       .then((records) => {
         if (records.length) {
@@ -2123,6 +2127,9 @@ function App() {
           <span>
             <kbd>esc</kbd> back
           </span>
+          {appVersion ? (
+            <span className="doc-foot__version">v{appVersion}</span>
+          ) : null}
         </div>
       </footer>
     </main>
