@@ -22,6 +22,7 @@ import {
   formatSpecsIndexSource,
   handledAskQuestion,
   handledClassificationRequest,
+  handledCommand,
   handledSpecDetailId,
   inertiaStep,
   lineSpreadOffset,
@@ -301,6 +302,21 @@ function App() {
   const [amendSpecId, setAmendSpecId] = useState("");
   const [amendId, setAmendId] = useState("");
   const [amendContent, setAmendContent] = useState("");
+
+  async function requestRunCommand(command: string) {
+    try {
+      const request = await invoke<ApprovalRequest>("request_run_command", {
+        command,
+      });
+      setPendingApproval(request);
+      setApprovalNotice(null);
+      recordEvent("command", "approval", `requested run ${request.command}`);
+    } catch (error) {
+      setApprovalNotice(
+        error instanceof Error ? error.message : "Could not request command.",
+      );
+    }
+  }
 
   async function requestSaveAmendment() {
     const specId = amendSpecId.trim();
@@ -962,6 +978,13 @@ function App() {
           })
             .then((result) => setClassification(result))
             .catch(() => setClassification(null));
+        }
+
+        const command = handledCommand(commandRoute);
+        if (command) {
+          void requestRunCommand(command);
+          setCommandError(null);
+          return;
         }
 
         const targetId = routeTargetElementId(commandRoute.target);

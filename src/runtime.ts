@@ -216,6 +216,7 @@ export type RouteTarget =
   | "spec-detail"
   | "answer"
   | "classification"
+  | "command"
   | "runtime-status"
   | "event-stream"
   | "phase"
@@ -300,6 +301,12 @@ export function handledAskQuestion(route: CommandRoute) {
 
 export function handledClassificationRequest(route: CommandRoute) {
   return route.disposition === "handled" && route.target === "classification"
+    ? route.parsed.argument
+    : null;
+}
+
+export function handledCommand(route: CommandRoute) {
+  return route.disposition === "handled" && route.target === "command"
     ? route.parsed.argument
     : null;
 }
