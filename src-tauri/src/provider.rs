@@ -71,6 +71,34 @@ pub fn build_review_prompt(diff: &str) -> String {
 }
 
 #[tauri::command]
+pub async fn run_subagent(
+    app: tauri::AppHandle,
+    provider: tauri::State<'_, ProviderState>,
+    roles: tauri::State<'_, crate::roles::ModelRolesState>,
+    id: u64,
+    input: String,
+) -> Result<String, String> {
+    let subagent = crate::subagents::load_store(&crate::subagents::store_path(&app)?)
+        .into_iter()
+        .find(|subagent| subagent.id == id)
+        .ok_or("Unknown subagent.")?;
+
+    let mut config = current_config(&provider);
+    let overrides = roles
+        .0
+        .lock()
+        .expect("roles state lock poisoned")
+        .clone();
+    config.model = crate::roles::resolve_model_for_role(&subagent.role, &overrides, &config.model);
+
+    generate(
+        &config,
+        &crate::subagents::build_subagent_prompt(&subagent.instructions, &input),
+    )
+    .await
+}
+
+#[tauri::command]
 pub async fn ask_with_context(
     workspace: tauri::State<'_, crate::workspace::WorkspaceState>,
     provider: tauri::State<'_, ProviderState>,
