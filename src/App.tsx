@@ -158,6 +158,54 @@ function App() {
     Array<{ role: string; model: string; overridden: boolean }>
   >([]);
   const [roleInputs, setRoleInputs] = useState<Record<string, string>>({});
+  const [extensions, setExtensions] = useState<
+    Array<{ id: number; name: string; kind: string; command: string }>
+  >([]);
+  const [extName, setExtName] = useState("");
+  const [extKind, setExtKind] = useState("tool");
+  const [extCommand, setExtCommand] = useState("");
+  const [extError, setExtError] = useState<string | null>(null);
+
+  async function refreshExtensions() {
+    try {
+      setExtensions(
+        await invoke<
+          Array<{ id: number; name: string; kind: string; command: string }>
+        >("list_extensions"),
+      );
+    } catch {
+      setExtensions([]);
+    }
+  }
+
+  async function registerExtension() {
+    setExtError(null);
+    try {
+      await invoke("register_extension", {
+        name: extName,
+        kind: extKind,
+        command: extCommand,
+      });
+      setExtName("");
+      setExtCommand("");
+      await refreshExtensions();
+    } catch (error) {
+      setExtError(
+        error instanceof Error ? error.message : "Could not register extension.",
+      );
+    }
+  }
+
+  async function removeExtension(id: number) {
+    try {
+      await invoke("remove_extension", { id });
+      await refreshExtensions();
+    } catch (error) {
+      setExtError(
+        error instanceof Error ? error.message : "Could not remove extension.",
+      );
+    }
+  }
 
   async function refreshModelRoles() {
     try {
@@ -692,6 +740,7 @@ function App() {
       .then((result) => setAutonomyMode(result.mode))
       .catch(() => {});
     void refreshModelRoles();
+    void refreshExtensions();
     invoke<SessionEvent[]>("load_events", { limit: 50 })
       .then((records) => {
         if (records.length) {
@@ -1623,6 +1672,68 @@ function App() {
                 </div>
               ))}
             </dl>
+          ) : null}
+        </section>
+
+        <section className="doc-section" id="extensions">
+          <h2>Extensions</h2>
+          <div className="doc-control">
+            <input
+              aria-label="Extension name"
+              placeholder="name"
+              value={extName}
+              spellCheck={false}
+              autoComplete="off"
+              onChange={(event) => setExtName(event.target.value)}
+            />
+            <select
+              aria-label="Extension kind"
+              value={extKind}
+              onChange={(event) => setExtKind(event.target.value)}
+            >
+              <option value="tool">tool</option>
+              <option value="mcp">mcp</option>
+              <option value="skill">skill</option>
+            </select>
+            <input
+              aria-label="Extension command"
+              placeholder="command"
+              value={extCommand}
+              spellCheck={false}
+              autoComplete="off"
+              onChange={(event) => setExtCommand(event.target.value)}
+            />
+            <button type="button" onClick={registerExtension}>
+              Add
+            </button>
+          </div>
+          {extError ? (
+            <p className="doc-workspace__notice doc-prose--mono">{extError}</p>
+          ) : null}
+          {extensions.length > 0 ? (
+            <ul className="doc-extensions" aria-label="Registered extensions">
+              {extensions.map((extension) => (
+                <li className="doc-extensions__row" key={extension.id}>
+                  <span className="doc-extensions__name">{extension.name}</span>
+                  <span className="doc-extensions__kind">{extension.kind}</span>
+                  <code className="doc-extensions__command">
+                    {extension.command}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => void requestRunCommand(extension.command)}
+                  >
+                    Run
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void removeExtension(extension.id)}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
           ) : null}
         </section>
 
