@@ -188,7 +188,11 @@
     },
     {
       "id": "FS-047",
-      "title": "Knowledge drift detection",
+      "title": "Knowledge drift detection"
+    },
+    {
+      "id": "FS-048",
+      "title": "Knowledge links",
       "planned": true
     }
   ]
