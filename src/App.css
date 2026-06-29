@@ -841,6 +841,36 @@ input {
   color: var(--ink-soft);
 }
 
+.doc-extensions {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.doc-extensions__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.doc-extensions__kind {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+}
+
+.doc-extensions__command {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--ink-faint);
+  overflow-wrap: anywhere;
+}
+
 .doc-signals {
   margin: 14px 0 0;
   padding: 0;

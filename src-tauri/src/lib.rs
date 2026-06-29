@@ -4,6 +4,7 @@ mod classify;
 mod command_dock;
 mod events;
 mod exec;
+mod extensions;
 mod git;
 mod provider;
 mod roles;
@@ -21,6 +22,7 @@ use autonomy::{get_autonomy_mode, set_autonomy_mode, AutonomyState};
 use classify::classify_request;
 use command_dock::{parse_command, route_command};
 use events::{append_event, load_events};
+use extensions::{list_extensions, register_extension, remove_extension};
 use git::{git_diff, git_log, git_status};
 use provider::{
     ask_model, ask_spec, ask_stream, draft_spec, get_provider_config, get_provider_status,
@@ -86,7 +88,10 @@ pub fn run() {
             set_model_role,
             append_event,
             load_events,
-            improvement_signals
+            improvement_signals,
+            register_extension,
+            list_extensions,
+            remove_extension
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
