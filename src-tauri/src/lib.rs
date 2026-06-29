@@ -16,8 +16,8 @@ mod workspace;
 
 use approvals::{
     request_commit, request_create_branch, request_create_pr, request_push,
-    request_run_command, request_save_amendment, request_save_spec, request_switch_branch,
-    resolve_approval, ApprovalState,
+    request_run_command, request_save_amendment, request_save_knowledge, request_save_spec,
+    request_switch_branch, resolve_approval, ApprovalState,
 };
 use autonomy::{get_autonomy_mode, set_autonomy_mode, AutonomyState};
 use classify::classify_request;
@@ -35,7 +35,7 @@ use runtime_status::{announce_runtime_status, get_runtime_status};
 use specs_index::{get_static_spec_detail, list_specs_index};
 use workflows::{list_workflows, remove_workflow, save_workflow};
 use workspace::{
-    get_workspace, inspect_planning_baseline, list_workspace_specs, open_workspace,
+    get_workspace, inspect_planning_baseline, list_knowledge, list_workspace_specs, open_workspace,
     read_workspace_doc, WorkspaceState,
 };
 
@@ -96,7 +96,9 @@ pub fn run() {
             remove_extension,
             save_workflow,
             list_workflows,
-            remove_workflow
+            remove_workflow,
+            request_save_knowledge,
+            list_knowledge
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
