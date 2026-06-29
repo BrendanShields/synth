@@ -185,6 +185,11 @@
     {
       "id": "FS-046",
       "title": "Extension permission scope"
+    },
+    {
+      "id": "FS-047",
+      "title": "Knowledge drift detection",
+      "planned": true
     }
   ]
 }
