@@ -31,7 +31,7 @@ use provider::{
 };
 use roles::{get_model_roles, set_model_role, ModelRolesState};
 use signals::improvement_signals;
-use runtime_status::{announce_runtime_status, get_runtime_status};
+use runtime_status::{announce_runtime_status, app_identity, get_runtime_status};
 use specs_index::{get_static_spec_detail, list_specs_index};
 use workflows::{list_workflows, remove_workflow, save_workflow};
 use workspace::{
@@ -54,6 +54,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_runtime_status,
             announce_runtime_status,
+            app_identity,
             parse_command,
             route_command,
             list_specs_index,

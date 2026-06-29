@@ -49,6 +49,22 @@ pub fn bootstrap_runtime_event() -> RuntimeEvent {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppIdentity {
+    pub name: String,
+    pub version: String,
+}
+
+#[tauri::command]
+pub fn app_identity(app: tauri::AppHandle) -> AppIdentity {
+    let info = app.package_info();
+    AppIdentity {
+        name: info.name.clone(),
+        version: info.version.to_string(),
+    }
+}
+
 #[tauri::command]
 pub fn get_runtime_status() -> RuntimeStatus {
     bootstrap_runtime_status()
@@ -67,6 +83,17 @@ pub fn announce_runtime_status(app: tauri::AppHandle) -> Result<RuntimeEvent, St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn app_identity_serializes_in_camel_case() {
+        let serialized = serde_json::to_value(AppIdentity {
+            name: "synth".to_string(),
+            version: "0.1.0".to_string(),
+        })
+        .unwrap();
+        assert_eq!(serialized["name"], "synth");
+        assert_eq!(serialized["version"], "0.1.0");
+    }
 
     #[test]
     fn bootstrap_runtime_status_matches_fs_001_contract() {

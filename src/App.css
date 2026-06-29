@@ -912,6 +912,11 @@ input {
   overflow-wrap: anywhere;
 }
 
+.doc-foot__version {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+}
+
 .doc-signals {
   margin: 14px 0 0;
   padding: 0;
