@@ -917,6 +917,21 @@ input {
   font-family: var(--mono);
 }
 
+.doc-tree {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+}
+
+.doc-tree__kind {
+  color: var(--ink-faint);
+}
+
 .doc-signals {
   margin: 14px 0 0;
   padding: 0;

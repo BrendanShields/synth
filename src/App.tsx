@@ -395,6 +395,42 @@ function App() {
   >([]);
   const [appVersion, setAppVersion] = useState("");
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+  type SessionNode = {
+    id: number;
+    parentId: number | null;
+    kind: string;
+    label: string;
+    detail: string;
+  };
+  const [sessionTree, setSessionTree] = useState<SessionNode[]>([]);
+  const currentNodeId = useRef<number | null>(null);
+
+  async function refreshSessionTree() {
+    try {
+      setSessionTree(await invoke<SessionNode[]>("load_session_tree"));
+    } catch {
+      setSessionTree([]);
+    }
+  }
+
+  async function recordSessionNode(
+    kind: string,
+    label: string,
+    detail: string,
+  ) {
+    try {
+      const node = await invoke<SessionNode>("append_session_node", {
+        parentId: currentNodeId.current,
+        kind,
+        label,
+        detail,
+      });
+      currentNodeId.current = node.id;
+      await refreshSessionTree();
+    } catch {
+      /* tree recording is best-effort */
+    }
+  }
 
   async function exportState() {
     try {
@@ -593,6 +629,7 @@ function App() {
       return;
     }
     const id = pendingApproval.id;
+    const action = pendingApproval.action;
     try {
       const outcome = await invoke<ApprovalOutcome>("resolve_approval", {
         id,
@@ -600,6 +637,9 @@ function App() {
       });
       setPendingApproval(null);
       setApprovalNotice(outcome.message);
+      if (approved) {
+        void recordSessionNode("action", action, outcome.message);
+      }
       recordEvent(
         approved ? "command" : "error",
         "approval",
@@ -698,6 +738,8 @@ function App() {
       setWorkspace(opened);
       setWorkspaceError(null);
       recordEvent("command", "workspace", `opened ${opened.name}`);
+      currentNodeId.current = null;
+      void recordSessionNode("session", "open", opened.name);
       void refreshBaseline();
       void refreshKnowledge();
     } catch (error) {
@@ -841,6 +883,7 @@ function App() {
     void refreshExtensions();
     void refreshWorkflows();
     void refreshKnowledge();
+    void refreshSessionTree();
     invoke<{ name: string; version: string }>("app_identity")
       .then((identity) => setAppVersion(identity.version))
       .catch(() => {});
@@ -1947,6 +1990,31 @@ function App() {
               <span className="doc-foot__version">{exportNotice}</span>
             ) : null}
           </div>
+          {sessionTree.length > 0 ? (
+            <ul className="doc-tree" aria-label="Session tree">
+              {(() => {
+                const byId = new Map(sessionTree.map((n) => [n.id, n]));
+                return sessionTree.map((node) => {
+                let depth = 0;
+                let parent = node.parentId;
+                while (parent !== null && depth <= sessionTree.length) {
+                  depth += 1;
+                  parent = byId.get(parent)?.parentId ?? null;
+                }
+                return (
+                  <li
+                    className="doc-tree__node"
+                    style={{ paddingLeft: `${depth * 16}px` }}
+                    key={node.id}
+                  >
+                    <span className="doc-tree__kind">{node.kind}</span>{" "}
+                    {node.label}
+                  </li>
+                );
+                });
+              })()}
+            </ul>
+          ) : null}
           {signals.length > 0 ? (
             <ul className="doc-signals" aria-label="Improvement signals">
               {signals.map((signal) => (

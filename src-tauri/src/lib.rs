@@ -10,6 +10,7 @@ mod git;
 mod provider;
 mod roles;
 mod runtime_status;
+mod session_tree;
 mod signals;
 mod specs_index;
 mod workflows;
@@ -34,6 +35,7 @@ use provider::{
 use roles::{get_model_roles, set_model_role, ModelRolesState};
 use signals::improvement_signals;
 use runtime_status::{announce_runtime_status, app_identity, get_runtime_status};
+use session_tree::{append_session_node, load_session_tree};
 use specs_index::{get_static_spec_detail, list_specs_index};
 use workflows::{list_workflows, remove_workflow, save_workflow};
 use workspace::{
@@ -102,7 +104,9 @@ pub fn run() {
             remove_workflow,
             request_save_knowledge,
             list_knowledge,
-            export_state
+            export_state,
+            append_session_node,
+            load_session_tree
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
