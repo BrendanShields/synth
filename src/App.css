@@ -696,6 +696,72 @@ input {
   color: var(--ink-faint);
 }
 
+.doc-roles {
+  margin: 16px 0 0;
+  display: grid;
+  gap: 8px;
+}
+
+.doc-roles__row {
+  display: grid;
+  grid-template-columns: minmax(0, 140px) 1fr;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.doc-roles__row dt {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.doc-roles__row dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.doc-roles__model {
+  min-width: 90px;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 0.74rem;
+}
+
+.doc-roles__model[data-overridden="true"] {
+  color: var(--accent);
+}
+
+.doc-roles__row input {
+  flex: 1;
+  min-width: 0;
+  max-width: 180px;
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}
+
+.doc-roles__row button {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
 .doc-diff {
   margin: 0;
   max-height: 60vh;

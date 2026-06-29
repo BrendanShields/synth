@@ -152,6 +152,32 @@ function App() {
   const [providerConfigError, setProviderConfigError] = useState<string | null>(
     null,
   );
+  const [modelRoles, setModelRoles] = useState<
+    Array<{ role: string; model: string; overridden: boolean }>
+  >([]);
+  const [roleInputs, setRoleInputs] = useState<Record<string, string>>({});
+
+  async function refreshModelRoles() {
+    try {
+      setModelRoles(
+        await invoke<
+          Array<{ role: string; model: string; overridden: boolean }>
+        >("get_model_roles"),
+      );
+    } catch {
+      setModelRoles([]);
+    }
+  }
+
+  async function saveModelRole(role: string) {
+    try {
+      await invoke("set_model_role", { role, model: roleInputs[role] ?? "" });
+      setRoleInputs((inputs) => ({ ...inputs, [role]: "" }));
+      void refreshModelRoles();
+    } catch {
+      /* keep current roles on failure */
+    }
+  }
 
   async function saveProviderConfig() {
     try {
@@ -616,6 +642,7 @@ function App() {
     invoke<{ mode: string }>("get_autonomy_mode")
       .then((result) => setAutonomyMode(result.mode))
       .catch(() => {});
+    void refreshModelRoles();
   }, []);
 
   useEffect(() => {
@@ -1475,6 +1502,39 @@ function App() {
             <p className="doc-workspace__notice doc-prose--mono">
               {providerConfigError}
             </p>
+          ) : null}
+          {modelRoles.length > 0 ? (
+            <dl className="doc-roles">
+              {modelRoles.map((role) => (
+                <div className="doc-roles__row" key={role.role}>
+                  <dt>{formatLabel(role.role)}</dt>
+                  <dd>
+                    <span
+                      className="doc-roles__model"
+                      data-overridden={role.overridden}
+                    >
+                      {role.model}
+                    </span>
+                    <input
+                      aria-label={`Override model for ${role.role}`}
+                      placeholder="override model"
+                      value={roleInputs[role.role] ?? ""}
+                      spellCheck={false}
+                      autoComplete="off"
+                      onChange={(event) =>
+                        setRoleInputs((inputs) => ({
+                          ...inputs,
+                          [role.role]: event.target.value,
+                        }))
+                      }
+                    />
+                    <button type="button" onClick={() => saveModelRole(role.role)}>
+                      Save
+                    </button>
+                  </dd>
+                </div>
+              ))}
+            </dl>
           ) : null}
         </section>
 
