@@ -270,6 +270,28 @@ function App() {
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [gitLog, setGitLog] = useState<GitCommit[]>([]);
   const [gitDiff, setGitDiff] = useState<GitDiff | null>(null);
+  const [diffReview, setDiffReview] = useState<string | null>(null);
+  const [reviewPending, setReviewPending] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+
+  async function reviewDiff() {
+    setReviewPending(true);
+    setReviewError(null);
+    setDiffReview(null);
+    try {
+      const result = await invoke<{ empty: boolean; review: string }>(
+        "review_diff",
+      );
+      setDiffReview(result.empty ? "No changes to review." : result.review);
+      recordEvent("command", "review", "reviewed diff");
+    } catch (error) {
+      setReviewError(
+        error instanceof Error ? error.message : "Could not review the diff.",
+      );
+    } finally {
+      setReviewPending(false);
+    }
+  }
   const [branchName, setBranchName] = useState("");
   const [commitMessage, setCommitMessage] = useState("");
   const [switchTarget, setSwitchTarget] = useState("");
@@ -1227,6 +1249,22 @@ function App() {
                 </div>
               ))}
             </pre>
+            <button
+              type="button"
+              className="doc-reader__close"
+              onClick={reviewDiff}
+              disabled={reviewPending}
+            >
+              {reviewPending ? "Reviewing…" : "Review diff"}
+            </button>
+            {reviewError ? (
+              <div className="doc-error" role="status">
+                <strong>Review unavailable</strong>
+                <span>{reviewError}</span>
+              </div>
+            ) : diffReview ? (
+              <p className="doc-prose">{diffReview}</p>
+            ) : null}
           </section>
         ) : null}
 

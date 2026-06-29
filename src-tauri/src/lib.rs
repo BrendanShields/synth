@@ -22,7 +22,7 @@ use events::{append_event, load_events};
 use git::{git_diff, git_log, git_status};
 use provider::{
     ask_model, ask_spec, ask_stream, draft_spec, get_provider_config, get_provider_status,
-    set_provider_config, ProviderState,
+    review_diff, set_provider_config, ProviderState,
 };
 use roles::{get_model_roles, set_model_role, ModelRolesState};
 use runtime_status::{announce_runtime_status, get_runtime_status};
@@ -73,6 +73,7 @@ pub fn run() {
             resolve_approval,
             classify_request,
             draft_spec,
+            review_diff,
             get_autonomy_mode,
             set_autonomy_mode,
             get_provider_config,

@@ -48,6 +48,70 @@ pub struct SpecDraft {
     pub draft: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffReview {
+    pub empty: bool,
+    pub review: String,
+}
+
+const MAX_REVIEW_DIFF_CHARS: usize = 12_000;
+
+pub fn truncate_diff(diff: &str, cap: usize) -> String {
+    diff.chars().take(cap).collect()
+}
+
+pub fn build_review_prompt(diff: &str) -> String {
+    format!(
+        "You are reviewing a git diff. Review it for correctness, bugs, risks, and \
+         omissions. Be concise and list concrete findings; if it looks fine, say so.\n\n\
+         ```diff\n{diff}\n```\n\n\
+         Review:"
+    )
+}
+
+#[tauri::command]
+pub async fn review_diff(
+    workspace: tauri::State<'_, crate::workspace::WorkspaceState>,
+    provider: tauri::State<'_, ProviderState>,
+    roles: tauri::State<'_, crate::roles::ModelRolesState>,
+) -> Result<DiffReview, String> {
+    let root = {
+        let guard = workspace
+            .0
+            .lock()
+            .expect("workspace state lock poisoned");
+        guard.as_ref().ok_or("No workspace is open.")?.root.clone()
+    };
+
+    let (is_repo, diff) = crate::git::diff_text(std::path::Path::new(&root))?;
+    if !is_repo || diff.trim().is_empty() {
+        return Ok(DiffReview {
+            empty: true,
+            review: String::new(),
+        });
+    }
+
+    let mut config = current_config(&provider);
+    let overrides = roles
+        .0
+        .lock()
+        .expect("roles state lock poisoned")
+        .clone();
+    config.model = crate::roles::resolve_model_for_role("adversary", &overrides, &config.model);
+
+    let review = generate(
+        &config,
+        &build_review_prompt(&truncate_diff(&diff, MAX_REVIEW_DIFF_CHARS)),
+    )
+    .await?;
+
+    Ok(DiffReview {
+        empty: false,
+        review,
+    })
+}
+
 pub fn default_provider_config() -> ProviderConfig {
     ProviderConfig {
         kind: "ollama".to_string(),
@@ -755,6 +819,20 @@ mod tests {
         .unwrap();
         assert_eq!(done["requestId"], 7);
         assert_eq!(done["answer"], "done");
+    }
+
+    #[test]
+    fn review_prompt_includes_diff_and_instruction() {
+        let prompt = build_review_prompt("- old\n+ new");
+        assert!(prompt.contains("- old"));
+        assert!(prompt.contains("+ new"));
+        assert!(prompt.to_lowercase().contains("review"));
+    }
+
+    #[test]
+    fn truncates_diff_to_the_cap() {
+        assert_eq!(truncate_diff("abcdef", 3), "abc");
+        assert_eq!(truncate_diff("abc", 10), "abc");
     }
 
     #[test]
