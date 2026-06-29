@@ -101,6 +101,17 @@ type ApprovalOutcome = {
   message: string;
 };
 
+type ExtensionRunRecord = {
+  id: number;
+  extensionId: number;
+  name: string;
+  kind: string;
+  scope: string;
+  command: string;
+  status: string;
+  detail: string;
+};
+
 type RuntimePhase = "loading" | "ready" | "runtime-unavailable";
 
 const RUNTIME_STATUS_EVENT = "synth-runtime-status";
@@ -167,6 +178,7 @@ function App() {
       scope: string;
     }>
   >([]);
+  const [extensionRuns, setExtensionRuns] = useState<ExtensionRunRecord[]>([]);
   const [extName, setExtName] = useState("");
   const [extKind, setExtKind] = useState("tool");
   const [extScope, setExtScope] = useState("read");
@@ -411,6 +423,18 @@ function App() {
     }
   }
 
+  async function refreshExtensionRuns() {
+    try {
+      setExtensionRuns(
+        await invoke<ExtensionRunRecord[]>("list_extension_runs", {
+          limit: 20,
+        }),
+      );
+    } catch {
+      setExtensionRuns([]);
+    }
+  }
+
   async function requestRunExtension(id: number) {
     try {
       const request = await invoke<ApprovalRequest>("request_run_extension", {
@@ -419,6 +443,7 @@ function App() {
       setPendingApproval(request);
       setApprovalNotice(null);
       recordEvent("command", "approval", `requested ${request.summary}`);
+      await refreshExtensionRuns();
     } catch (error) {
       setApprovalNotice(
         error instanceof Error ? error.message : "Could not run extension.",
@@ -849,6 +874,7 @@ function App() {
         "approval",
         outcome.message,
       );
+      void refreshExtensionRuns();
       if (approved) {
         setBranchName("");
         setCommitMessage("");
@@ -870,6 +896,7 @@ function App() {
       setApprovalNotice(
         error instanceof Error ? error.message : "Approval failed.",
       );
+      void refreshExtensionRuns();
     }
   }
 
@@ -1085,6 +1112,7 @@ function App() {
       .catch(() => {});
     void refreshModelRoles();
     void refreshExtensions();
+    void refreshExtensionRuns();
     void refreshWorkflows();
     void refreshSubagents();
     void refreshKnowledge();
@@ -2098,6 +2126,29 @@ function App() {
               ))}
             </ul>
           ) : null}
+          <h3>Recent extension runs</h3>
+          {extensionRuns.length > 0 ? (
+            <ol className="doc-events" aria-label="Recent extension runs">
+              {extensionRuns.map((run) => (
+                <li
+                  className="doc-events__entry"
+                  data-kind={run.status === "failed" ? "error" : "command"}
+                  key={run.id}
+                >
+                  <strong>{run.name}</strong>{" "}
+                  <span>
+                    {run.status} · {run.kind} · {run.scope}
+                  </span>
+                  <code>{run.command}</code>
+                  <span>{run.detail}</span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="doc-prose doc-prose--muted" role="status">
+              Extension run activity will appear here.
+            </p>
+          )}
         </section>
 
         {workspace ? (
