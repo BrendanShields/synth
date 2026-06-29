@@ -144,7 +144,15 @@
     },
     {
       "id": "FS-036",
-      "title": "Improvement signals",
+      "title": "Improvement signals"
+    },
+    {
+      "id": "FS-037",
+      "title": "Extension registry"
+    },
+    {
+      "id": "FS-038",
+      "title": "Workflow definitions",
       "planned": true
     }
   ]
