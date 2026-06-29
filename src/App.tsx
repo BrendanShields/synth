@@ -394,6 +394,19 @@ function App() {
     Array<{ kind: string; summary: string; count: number }>
   >([]);
   const [appVersion, setAppVersion] = useState("");
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
+
+  async function exportState() {
+    try {
+      const path = await invoke<string>("export_state");
+      setExportNotice(`Exported ${path}`);
+      recordEvent("command", "export", "exported state");
+    } catch (error) {
+      setExportNotice(
+        error instanceof Error ? error.message : "Could not export state.",
+      );
+    }
+  }
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [baseline, setBaseline] = useState<PlanningBaseline | null>(null);
@@ -1926,6 +1939,14 @@ function App() {
 
         <section className="doc-section" id="event-stream">
           <h2>Event stream</h2>
+          <div className="doc-control">
+            <button type="button" onClick={exportState}>
+              Export state
+            </button>
+            {exportNotice ? (
+              <span className="doc-foot__version">{exportNotice}</span>
+            ) : null}
+          </div>
           {signals.length > 0 ? (
             <ul className="doc-signals" aria-label="Improvement signals">
               {signals.map((signal) => (

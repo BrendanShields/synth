@@ -41,7 +41,7 @@ pub fn save_store(path: &Path, workflows: &[Workflow]) -> Result<(), String> {
     std::fs::write(path, content).map_err(|error| format!("Cannot write workflows: {error}"))
 }
 
-fn store_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub fn store_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
         .map(|dir| dir.join("workflows.json"))

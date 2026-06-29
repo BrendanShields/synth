@@ -48,7 +48,7 @@ pub fn load_records(path: &Path, limit: usize) -> Vec<EventRecord> {
     records
 }
 
-fn events_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub fn events_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
         .map(|dir| dir.join("events.jsonl"))
