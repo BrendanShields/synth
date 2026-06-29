@@ -189,6 +189,23 @@ function App() {
   >([]);
   const [knAnswer, setKnAnswer] = useState<string | null>(null);
   const [knBusy, setKnBusy] = useState(false);
+  const [drift, setDrift] = useState<Array<{
+    slug: string;
+    title: string;
+    missingPath: string;
+  }> | null>(null);
+
+  async function checkDrift() {
+    try {
+      setDrift(
+        await invoke<Array<{ slug: string; title: string; missingPath: string }>>(
+          "detect_knowledge_drift",
+        ),
+      );
+    } catch {
+      setDrift([]);
+    }
+  }
 
   async function retrieveKnowledge() {
     try {
@@ -2045,7 +2062,25 @@ function App() {
               <button type="button" onClick={askWithContext} disabled={knBusy}>
                 {knBusy ? "Asking…" : "Ask grounded"}
               </button>
+              <button type="button" onClick={checkDrift}>
+                Check drift
+              </button>
             </div>
+            {drift !== null ? (
+              drift.length > 0 ? (
+                <ul className="doc-signals" aria-label="Knowledge drift">
+                  {drift.map((finding, index) => (
+                    <li className="doc-signals__item" key={index}>
+                      {finding.title} → {finding.missingPath}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="doc-prose doc-prose--muted" role="status">
+                  No drift detected.
+                </p>
+              )
+            ) : null}
             {knHits.length > 0 ? (
               <ul className="doc-extensions" aria-label="Knowledge hits">
                 {knHits.map((hit) => (
