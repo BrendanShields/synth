@@ -490,6 +490,7 @@ function App() {
     setSessionEvents((events) =>
       appendSessionEvent(events, { id, kind, label, detail }),
     );
+    void invoke("append_event", { kind, label, detail }).catch(() => {});
   }
 
   async function openWorkspace() {
@@ -643,6 +644,14 @@ function App() {
       .then((result) => setAutonomyMode(result.mode))
       .catch(() => {});
     void refreshModelRoles();
+    invoke<SessionEvent[]>("load_events", { limit: 50 })
+      .then((records) => {
+        if (records.length) {
+          setSessionEvents(records);
+          eventCounter.current = records[0]?.id ?? 0;
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
