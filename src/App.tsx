@@ -283,6 +283,75 @@ function App() {
     }
   }
 
+  type SubagentEntry = {
+    id: number;
+    name: string;
+    role: string;
+    instructions: string;
+  };
+  const [subagents, setSubagents] = useState<SubagentEntry[]>([]);
+  const [saName, setSaName] = useState("");
+  const [saRole, setSaRole] = useState("adversary");
+  const [saInstructions, setSaInstructions] = useState("");
+  const [saInput, setSaInput] = useState("");
+  const [saAnswer, setSaAnswer] = useState<string | null>(null);
+  const [saBusy, setSaBusy] = useState(false);
+  const [saError, setSaError] = useState<string | null>(null);
+
+  async function refreshSubagents() {
+    try {
+      setSubagents(await invoke<SubagentEntry[]>("list_subagents"));
+    } catch {
+      setSubagents([]);
+    }
+  }
+
+  async function saveSubagent() {
+    setSaError(null);
+    try {
+      await invoke("save_subagent", {
+        name: saName,
+        role: saRole,
+        instructions: saInstructions,
+      });
+      setSaName("");
+      setSaInstructions("");
+      await refreshSubagents();
+    } catch (error) {
+      setSaError(
+        error instanceof Error ? error.message : "Could not save subagent.",
+      );
+    }
+  }
+
+  async function removeSubagent(id: number) {
+    try {
+      await invoke("remove_subagent", { id });
+      await refreshSubagents();
+    } catch {
+      /* keep list on failure */
+    }
+  }
+
+  async function runSubagent(id: number) {
+    setSaBusy(true);
+    setSaAnswer(null);
+    try {
+      const answer = await invoke<string>("run_subagent", {
+        id,
+        input: saInput,
+      });
+      setSaAnswer(answer);
+      recordEvent("answer", "subagent", "ran subagent");
+    } catch (error) {
+      setSaAnswer(
+        error instanceof Error ? error.message : "Could not run subagent.",
+      );
+    } finally {
+      setSaBusy(false);
+    }
+  }
+
   async function refreshWorkflows() {
     try {
       setWorkflows(
@@ -1017,6 +1086,7 @@ function App() {
     void refreshModelRoles();
     void refreshExtensions();
     void refreshWorkflows();
+    void refreshSubagents();
     void refreshKnowledge();
     void refreshSessionTree();
     invoke<{ name: string; version: string }>("app_identity")
@@ -2131,6 +2201,84 @@ function App() {
             {knAnswer ? <p className="doc-prose">{knAnswer}</p> : null}
           </section>
         ) : null}
+
+        <section className="doc-section" id="subagents">
+          <h2>Subagents</h2>
+          <div className="doc-control">
+            <input
+              aria-label="Subagent name"
+              placeholder="name"
+              value={saName}
+              spellCheck={false}
+              autoComplete="off"
+              onChange={(event) => setSaName(event.target.value)}
+            />
+            <select
+              aria-label="Subagent role"
+              value={saRole}
+              onChange={(event) => setSaRole(event.target.value)}
+            >
+              {(modelRoles.length > 0
+                ? modelRoles.map((role) => role.role)
+                : ["adversary"]
+              ).map((role) => (
+                <option value={role} key={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
+            <textarea
+              aria-label="Subagent instructions"
+              placeholder="instructions"
+              value={saInstructions}
+              spellCheck={false}
+              autoComplete="off"
+              rows={2}
+              onChange={(event) => setSaInstructions(event.target.value)}
+            />
+            <button type="button" onClick={saveSubagent}>
+              Save
+            </button>
+          </div>
+          {saError ? (
+            <p className="doc-workspace__notice doc-prose--mono">{saError}</p>
+          ) : null}
+          {subagents.length > 0 ? (
+            <>
+              <ul className="doc-extensions" aria-label="Subagents">
+                {subagents.map((subagent) => (
+                  <li className="doc-extensions__row" key={subagent.id}>
+                    <span className="doc-extensions__name">{subagent.name}</span>
+                    <span className="doc-extensions__kind">{subagent.role}</span>
+                    <button
+                      type="button"
+                      onClick={() => void runSubagent(subagent.id)}
+                      disabled={saBusy}
+                    >
+                      Run
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void removeSubagent(subagent.id)}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <textarea
+                aria-label="Subagent input"
+                placeholder="input for Run"
+                value={saInput}
+                spellCheck={false}
+                autoComplete="off"
+                rows={2}
+                onChange={(event) => setSaInput(event.target.value)}
+              />
+              {saAnswer ? <p className="doc-prose">{saAnswer}</p> : null}
+            </>
+          ) : null}
+        </section>
 
         <section className="doc-section" id="workflows">
           <h2>Workflows</h2>

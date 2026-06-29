@@ -14,6 +14,7 @@ mod runtime_status;
 mod session_tree;
 mod signals;
 mod specs_index;
+mod subagents;
 mod workflows;
 mod workspace;
 
@@ -32,13 +33,14 @@ use git::{git_diff, git_log, git_status};
 use knowledge::{detect_knowledge_drift, knowledge_links, retrieve_knowledge};
 use provider::{
     ask_model, ask_spec, ask_stream, draft_spec, get_provider_config, get_provider_status,
-    ask_with_context, review_diff, set_provider_config, ProviderState,
+    ask_with_context, review_diff, run_subagent, set_provider_config, ProviderState,
 };
 use roles::{get_model_roles, set_model_role, ModelRolesState};
 use signals::improvement_signals;
 use runtime_status::{announce_runtime_status, app_identity, get_runtime_status};
 use session_tree::{append_session_node, load_session_tree, replay_path};
 use specs_index::{get_static_spec_detail, list_specs_index};
+use subagents::{list_subagents, remove_subagent, save_subagent};
 use workflows::{list_workflows, remove_workflow, save_workflow};
 use workspace::{
     get_workspace, inspect_planning_baseline, list_knowledge, list_workspace_specs, open_workspace,
@@ -115,7 +117,11 @@ pub fn run() {
             ask_with_context,
             detect_knowledge_drift,
             knowledge_links,
-            import_state
+            import_state,
+            save_subagent,
+            list_subagents,
+            remove_subagent,
+            run_subagent
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
