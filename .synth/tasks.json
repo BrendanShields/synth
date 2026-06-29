@@ -172,7 +172,11 @@
     },
     {
       "id": "FS-043",
-      "title": "Session replay",
+      "title": "Session replay"
+    },
+    {
+      "id": "FS-044",
+      "title": "Knowledge retrieval into context",
       "planned": true
     }
   ]
