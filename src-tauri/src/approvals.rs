@@ -249,6 +249,20 @@ impl ApprovalInner {
         }
     }
 
+    fn record_run_extension(&mut self, command: &str, name: &str, scope: &str) -> ApprovalRequest {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.pending
+            .insert(id, PendingAction::RunCommand(command.to_string()));
+        ApprovalRequest {
+            id,
+            auto_approve: false,
+            action: "run-command".to_string(),
+            summary: format!("Run extension {name} ({scope}): {command}"),
+            command: command.to_string(),
+        }
+    }
+
     fn record_run_command(&mut self, command: &str) -> ApprovalRequest {
         let id = self.next_id;
         self.next_id += 1;
@@ -477,6 +491,42 @@ pub fn request_save_knowledge(
         .lock()
         .expect("approval state lock poisoned")
         .record_save_knowledge(&slug, &content);
+    request.auto_approve = auto_approves(&request.action, &mode);
+    Ok(request)
+}
+
+#[tauri::command]
+pub fn request_run_extension(
+    app: tauri::AppHandle,
+    approvals: tauri::State<'_, ApprovalState>,
+    workspace: tauri::State<'_, WorkspaceState>,
+    autonomy: tauri::State<'_, AutonomyState>,
+    id: u64,
+) -> Result<ApprovalRequest, String> {
+    let extension = crate::extensions::load_registry(&crate::extensions::registry_path(&app)?)
+        .into_iter()
+        .find(|extension| extension.id == id)
+        .ok_or("Unknown extension.")?;
+
+    if workspace
+        .0
+        .lock()
+        .expect("workspace state lock poisoned")
+        .is_none()
+    {
+        return Err("No workspace is open.".to_string());
+    }
+
+    let mode = autonomy
+        .0
+        .lock()
+        .expect("autonomy state lock poisoned")
+        .clone();
+    let mut request = approvals
+        .0
+        .lock()
+        .expect("approval state lock poisoned")
+        .record_run_extension(&extension.command, &extension.name, &extension.scope);
     request.auto_approve = auto_approves(&request.action, &mode);
     Ok(request)
 }
@@ -720,6 +770,22 @@ mod tests {
         for action in ["push", "create-pr", "save-amendment", "run-command"] {
             assert!(!auto_approves(action, "high_autonomy"), "{action} must never auto-approve");
         }
+    }
+
+    #[test]
+    fn records_run_extension_with_scope_in_summary_and_no_auto_approve() {
+        let mut inner = ApprovalInner::default();
+        let request = inner.record_run_extension("rg --version", "ripgrep", "shell");
+
+        assert_eq!(request.action, "run-command");
+        assert_eq!(request.command, "rg --version");
+        assert!(!request.auto_approve);
+        assert!(request.summary.contains("ripgrep"));
+        assert!(request.summary.contains("shell"));
+        assert_eq!(
+            inner.take(request.id),
+            Some(PendingAction::RunCommand("rg --version".to_string()))
+        );
     }
 
     #[test]

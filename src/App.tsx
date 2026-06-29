@@ -159,10 +159,17 @@ function App() {
   >([]);
   const [roleInputs, setRoleInputs] = useState<Record<string, string>>({});
   const [extensions, setExtensions] = useState<
-    Array<{ id: number; name: string; kind: string; command: string }>
+    Array<{
+      id: number;
+      name: string;
+      kind: string;
+      command: string;
+      scope: string;
+    }>
   >([]);
   const [extName, setExtName] = useState("");
   const [extKind, setExtKind] = useState("tool");
+  const [extScope, setExtScope] = useState("read");
   const [extCommand, setExtCommand] = useState("");
   const [extError, setExtError] = useState<string | null>(null);
   const [workflows, setWorkflows] = useState<
@@ -286,11 +293,32 @@ function App() {
     try {
       setExtensions(
         await invoke<
-          Array<{ id: number; name: string; kind: string; command: string }>
+          Array<{
+            id: number;
+            name: string;
+            kind: string;
+            command: string;
+            scope: string;
+          }>
         >("list_extensions"),
       );
     } catch {
       setExtensions([]);
+    }
+  }
+
+  async function requestRunExtension(id: number) {
+    try {
+      const request = await invoke<ApprovalRequest>("request_run_extension", {
+        id,
+      });
+      setPendingApproval(request);
+      setApprovalNotice(null);
+      recordEvent("command", "approval", `requested ${request.summary}`);
+    } catch (error) {
+      setApprovalNotice(
+        error instanceof Error ? error.message : "Could not run extension.",
+      );
     }
   }
 
@@ -301,6 +329,7 @@ function App() {
         name: extName,
         kind: extKind,
         command: extCommand,
+        scope: extScope,
       });
       setExtName("");
       setExtCommand("");
@@ -1912,6 +1941,16 @@ function App() {
               <option value="mcp">mcp</option>
               <option value="skill">skill</option>
             </select>
+            <select
+              aria-label="Extension scope"
+              value={extScope}
+              onChange={(event) => setExtScope(event.target.value)}
+            >
+              <option value="read">read</option>
+              <option value="write">write</option>
+              <option value="network">network</option>
+              <option value="shell">shell</option>
+            </select>
             <input
               aria-label="Extension command"
               placeholder="command"
@@ -1932,13 +1971,15 @@ function App() {
               {extensions.map((extension) => (
                 <li className="doc-extensions__row" key={extension.id}>
                   <span className="doc-extensions__name">{extension.name}</span>
-                  <span className="doc-extensions__kind">{extension.kind}</span>
+                  <span className="doc-extensions__kind">
+                    {extension.kind} · {extension.scope}
+                  </span>
                   <code className="doc-extensions__command">
                     {extension.command}
                   </code>
                   <button
                     type="button"
-                    onClick={() => void requestRunCommand(extension.command)}
+                    onClick={() => void requestRunExtension(extension.id)}
                   >
                     Run
                   </button>
