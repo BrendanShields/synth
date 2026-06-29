@@ -112,6 +112,13 @@ type ExtensionRunRecord = {
   detail: string;
 };
 
+type ReviewFinding = {
+  id: number;
+  kind: string;
+  subject: string;
+  finding: string;
+};
+
 type RuntimePhase = "loading" | "ready" | "runtime-unavailable";
 
 const RUNTIME_STATUS_EVENT = "synth-runtime-status";
@@ -600,6 +607,9 @@ function App() {
         result.empty ? "No requirements to review." : result.review,
       );
       recordEvent("command", "review", "reviewed requirements");
+      if (!result.empty) {
+        await captureReviewFinding("requirements", "drafted spec", result.review);
+      }
     } catch (error) {
       setReqReviewError(
         error instanceof Error
@@ -717,6 +727,30 @@ function App() {
   const [diffReview, setDiffReview] = useState<string | null>(null);
   const [reviewPending, setReviewPending] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewFindings, setReviewFindings] = useState<ReviewFinding[]>([]);
+
+  async function refreshReviewFindings() {
+    try {
+      setReviewFindings(
+        await invoke<ReviewFinding[]>("list_review_findings", { limit: 20 }),
+      );
+    } catch {
+      setReviewFindings([]);
+    }
+  }
+
+  async function captureReviewFinding(
+    kind: string,
+    subject: string,
+    finding: string,
+  ) {
+    try {
+      await invoke("capture_review_finding", { kind, subject, finding });
+      await refreshReviewFindings();
+    } catch {
+      /* capture is best-effort; the review itself already succeeded */
+    }
+  }
 
   async function reviewDiff() {
     setReviewPending(true);
@@ -728,6 +762,9 @@ function App() {
       );
       setDiffReview(result.empty ? "No changes to review." : result.review);
       recordEvent("command", "review", "reviewed diff");
+      if (!result.empty) {
+        await captureReviewFinding("diff", "working tree", result.review);
+      }
     } catch (error) {
       setReviewError(
         error instanceof Error ? error.message : "Could not review the diff.",
@@ -1146,6 +1183,7 @@ function App() {
     void refreshModelRoles();
     void refreshExtensions();
     void refreshExtensionRuns();
+    void refreshReviewFindings();
     void refreshWorkflows();
     void refreshSubagents();
     void refreshKnowledge();
@@ -1762,6 +1800,24 @@ function App() {
             ) : null}
           </section>
         ) : null}
+
+        <section className="doc-section" id="review-findings">
+          <h2>Review findings</h2>
+          {reviewFindings.length > 0 ? (
+            <ol className="doc-events" aria-label="Captured review findings">
+              {reviewFindings.map((found) => (
+                <li className="doc-events__entry" data-kind="review" key={found.id}>
+                  <strong>{found.kind}</strong> · <span>{found.subject}</span>
+                  <p className="doc-prose">{found.finding}</p>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="doc-prose doc-prose--muted" role="status">
+              Adversarial review findings will appear here.
+            </p>
+          )}
+        </section>
 
         {workspace && gitLog.length > 0 ? (
           <section className="doc-section" id="git-log">

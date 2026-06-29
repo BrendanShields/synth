@@ -9,6 +9,7 @@ mod extensions;
 mod git;
 mod knowledge;
 mod provider;
+mod review_findings;
 mod roles;
 mod runtime_status;
 mod session_tree;
@@ -36,6 +37,7 @@ use provider::{
     get_provider_status, review_diff, review_requirements, run_subagent, set_provider_config,
     ProviderState,
 };
+use review_findings::{capture_review_finding, list_review_findings};
 use roles::{get_model_roles, set_model_role, ModelRolesState};
 use runtime_status::{announce_runtime_status, app_identity, get_runtime_status};
 use session_tree::{append_session_node, load_session_tree, replay_path};
@@ -94,6 +96,8 @@ pub fn run() {
             draft_spec,
             review_diff,
             review_requirements,
+            capture_review_finding,
+            list_review_findings,
             get_autonomy_mode,
             set_autonomy_mode,
             get_provider_config,
