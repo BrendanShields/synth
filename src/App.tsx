@@ -404,6 +404,23 @@ function App() {
   };
   const [sessionTree, setSessionTree] = useState<SessionNode[]>([]);
   const currentNodeId = useRef<number | null>(null);
+  const [replayPath, setReplayPath] = useState<SessionNode[] | null>(null);
+  const [replaySelected, setReplaySelected] = useState<number | null>(null);
+
+  async function replayNode(nodeId: number) {
+    if (replaySelected === nodeId) {
+      setReplaySelected(null);
+      setReplayPath(null);
+      return;
+    }
+    try {
+      const path = await invoke<SessionNode[]>("replay_path", { nodeId });
+      setReplaySelected(nodeId);
+      setReplayPath(path);
+    } catch {
+      setReplayPath(null);
+    }
+  }
 
   async function refreshSessionTree() {
     try {
@@ -2007,13 +2024,30 @@ function App() {
                     style={{ paddingLeft: `${depth * 16}px` }}
                     key={node.id}
                   >
-                    <span className="doc-tree__kind">{node.kind}</span>{" "}
-                    {node.label}
+                    <button
+                      type="button"
+                      className="doc-tree__select"
+                      data-selected={replaySelected === node.id}
+                      onClick={() => void replayNode(node.id)}
+                    >
+                      <span className="doc-tree__kind">{node.kind}</span>{" "}
+                      {node.label}
+                    </button>
                   </li>
                 );
                 });
               })()}
             </ul>
+          ) : null}
+          {replayPath && replayPath.length > 0 ? (
+            <ol className="doc-tree__replay" aria-label="Replay path">
+              {replayPath.map((node) => (
+                <li key={node.id}>
+                  <span className="doc-tree__kind">{node.kind}</span>{" "}
+                  {node.label}
+                </li>
+              ))}
+            </ol>
           ) : null}
           {signals.length > 0 ? (
             <ul className="doc-signals" aria-label="Improvement signals">

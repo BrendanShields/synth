@@ -107,6 +107,15 @@ pub fn load_session_tree(app: tauri::AppHandle) -> Vec<SessionNode> {
     }
 }
 
+#[tauri::command]
+pub fn replay_path(app: tauri::AppHandle, node_id: u64) -> Vec<SessionNode> {
+    let nodes = match tree_path(&app) {
+        Ok(path) => load_nodes(&path),
+        Err(_) => return Vec::new(),
+    };
+    path_to_root(&nodes, node_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

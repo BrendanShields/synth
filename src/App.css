@@ -932,6 +932,31 @@ input {
   color: var(--ink-faint);
 }
 
+.doc-tree__select {
+  border: none;
+  background: none;
+  padding: 2px 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.doc-tree__select[data-selected="true"] {
+  color: var(--ink);
+}
+
+.doc-tree__replay {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+  border-left: 2px solid var(--line-strong, #cbb8a6);
+}
+
 .doc-signals {
   margin: 14px 0 0;
   padding: 0;
