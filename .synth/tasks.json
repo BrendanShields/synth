@@ -164,7 +164,11 @@
     },
     {
       "id": "FS-041",
-      "title": "State export",
+      "title": "State export"
+    },
+    {
+      "id": "FS-042",
+      "title": "Session tree foundation",
       "planned": true
     }
   ]
