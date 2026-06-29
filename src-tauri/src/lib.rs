@@ -8,6 +8,7 @@ mod git;
 mod provider;
 mod roles;
 mod runtime_status;
+mod signals;
 mod specs_index;
 mod workspace;
 
@@ -26,6 +27,7 @@ use provider::{
     review_diff, set_provider_config, ProviderState,
 };
 use roles::{get_model_roles, set_model_role, ModelRolesState};
+use signals::improvement_signals;
 use runtime_status::{announce_runtime_status, get_runtime_status};
 use specs_index::{get_static_spec_detail, list_specs_index};
 use workspace::{
@@ -83,7 +85,8 @@ pub fn run() {
             get_model_roles,
             set_model_role,
             append_event,
-            load_events
+            load_events,
+            improvement_signals
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

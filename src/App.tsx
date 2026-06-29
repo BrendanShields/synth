@@ -262,6 +262,9 @@ function App() {
   );
   const [sessionEvents, setSessionEvents] = useState<SessionEvent[]>([]);
   const eventCounter = useRef(0);
+  const [signals, setSignals] = useState<
+    Array<{ kind: string; summary: string; count: number }>
+  >([]);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [baseline, setBaseline] = useState<PlanningBaseline | null>(null);
@@ -698,6 +701,14 @@ function App() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    invoke<Array<{ kind: string; summary: string; count: number }>>(
+      "improvement_signals",
+    )
+      .then(setSignals)
+      .catch(() => {});
+  }, [sessionEvents]);
 
   useEffect(() => {
     let active = true;
@@ -1617,6 +1628,19 @@ function App() {
 
         <section className="doc-section" id="event-stream">
           <h2>Event stream</h2>
+          {signals.length > 0 ? (
+            <ul className="doc-signals" aria-label="Improvement signals">
+              {signals.map((signal) => (
+                <li
+                  className="doc-signals__item"
+                  data-kind={signal.kind}
+                  key={signal.kind}
+                >
+                  {signal.summary}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <blockquote className="doc-quote">
             {runtimeEvent?.eventType ?? "No runtime event yet"}
             <cite>{runtimeEvent?.eventId ?? RUNTIME_STATUS_EVENT}</cite>
