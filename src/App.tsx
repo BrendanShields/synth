@@ -207,6 +207,24 @@ function App() {
     }
   }
 
+  const [noteLinks, setNoteLinks] = useState<Array<{
+    from: string;
+    to: string;
+    resolved: boolean;
+  }> | null>(null);
+
+  async function viewLinks() {
+    try {
+      setNoteLinks(
+        await invoke<Array<{ from: string; to: string; resolved: boolean }>>(
+          "knowledge_links",
+        ),
+      );
+    } catch {
+      setNoteLinks([]);
+    }
+  }
+
   async function retrieveKnowledge() {
     try {
       setKnHits(
@@ -2065,7 +2083,26 @@ function App() {
               <button type="button" onClick={checkDrift}>
                 Check drift
               </button>
+              <button type="button" onClick={viewLinks}>
+                View links
+              </button>
             </div>
+            {noteLinks !== null ? (
+              noteLinks.length > 0 ? (
+                <ul className="doc-tree" aria-label="Knowledge links">
+                  {noteLinks.map((link, index) => (
+                    <li key={index}>
+                      {link.from} → {link.to}
+                      {link.resolved ? "" : " (dangling)"}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="doc-prose doc-prose--muted" role="status">
+                  No links yet.
+                </p>
+              )
+            ) : null}
             {drift !== null ? (
               drift.length > 0 ? (
                 <ul className="doc-signals" aria-label="Knowledge drift">
