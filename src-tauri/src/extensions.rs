@@ -33,7 +33,7 @@ pub fn save_registry(path: &Path, extensions: &[Extension]) -> Result<(), String
     std::fs::write(path, content).map_err(|error| format!("Cannot write registry: {error}"))
 }
 
-fn registry_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub fn registry_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
         .map(|dir| dir.join("extensions.json"))
