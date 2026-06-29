@@ -7,6 +7,7 @@ mod events;
 mod exec;
 mod extensions;
 mod git;
+mod knowledge;
 mod provider;
 mod roles;
 mod runtime_status;
@@ -28,9 +29,10 @@ use command_dock::{parse_command, route_command};
 use events::{append_event, load_events};
 use extensions::{list_extensions, register_extension, remove_extension};
 use git::{git_diff, git_log, git_status};
+use knowledge::retrieve_knowledge;
 use provider::{
     ask_model, ask_spec, ask_stream, draft_spec, get_provider_config, get_provider_status,
-    review_diff, set_provider_config, ProviderState,
+    ask_with_context, review_diff, set_provider_config, ProviderState,
 };
 use roles::{get_model_roles, set_model_role, ModelRolesState};
 use signals::improvement_signals;
@@ -107,7 +109,9 @@ pub fn run() {
             export_state,
             append_session_node,
             load_session_tree,
-            replay_path
+            replay_path,
+            retrieve_knowledge,
+            ask_with_context
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

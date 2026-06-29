@@ -343,6 +343,20 @@ pub fn list_knowledge_in(root: &Path) -> Vec<KnowledgeNote> {
     notes
 }
 
+pub fn read_knowledge_in(root: &Path) -> Vec<(KnowledgeNote, String)> {
+    list_knowledge_in(root)
+        .into_iter()
+        .filter_map(|note| {
+            let path = root.join(&note.path);
+            if !is_within_root(root, &path) {
+                return None;
+            }
+            let content = std::fs::read_to_string(&path).ok()?;
+            Some((note, content))
+        })
+        .collect()
+}
+
 #[tauri::command]
 pub fn list_knowledge(
     state: tauri::State<'_, WorkspaceState>,

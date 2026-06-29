@@ -71,6 +71,36 @@ pub fn build_review_prompt(diff: &str) -> String {
 }
 
 #[tauri::command]
+pub async fn ask_with_context(
+    workspace: tauri::State<'_, crate::workspace::WorkspaceState>,
+    provider: tauri::State<'_, ProviderState>,
+    question: String,
+) -> Result<String, String> {
+    let root = {
+        let guard = workspace.0.lock().expect("workspace state lock poisoned");
+        guard.as_ref().ok_or("No workspace is open.")?.root.clone()
+    };
+
+    let docs = crate::workspace::read_knowledge_in(std::path::Path::new(&root));
+    let hits = crate::knowledge::rank_knowledge(&docs, &question, 3);
+    let grounding: Vec<(String, String)> = hits
+        .iter()
+        .filter_map(|hit| {
+            docs.iter()
+                .find(|(note, _)| note.slug == hit.slug)
+                .map(|(note, content)| (note.title.clone(), content.clone()))
+        })
+        .collect();
+
+    let config = current_config(&provider);
+    generate(
+        &config,
+        &crate::knowledge::build_grounded_prompt(&grounding, &question),
+    )
+    .await
+}
+
+#[tauri::command]
 pub async fn review_diff(
     workspace: tauri::State<'_, crate::workspace::WorkspaceState>,
     provider: tauri::State<'_, ProviderState>,
