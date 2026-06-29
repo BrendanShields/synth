@@ -91,6 +91,7 @@ type ApprovalRequest = {
   action: string;
   summary: string;
   command: string;
+  autoApprove: boolean;
 };
 
 type ApprovalOutcome = {
@@ -397,6 +398,12 @@ function App() {
       );
     }
   }
+
+  useEffect(() => {
+    if (pendingApproval?.autoApprove) {
+      void resolveApproval(true);
+    }
+  }, [pendingApproval]);
 
   async function resolveApproval(approved: boolean) {
     if (!pendingApproval) {
@@ -1662,7 +1669,7 @@ function App() {
         </div>
       </div>
 
-      {pendingApproval ? (
+      {pendingApproval && !pendingApproval.autoApprove ? (
         <div
           className="doc-approval"
           role="dialog"
