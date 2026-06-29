@@ -247,6 +247,33 @@ pub fn git_diff(state: tauri::State<'_, WorkspaceState>) -> Result<GitDiff, Stri
     }
 }
 
+pub fn diff_text(root: &Path) -> Result<(bool, String), String> {
+    let output = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["diff", "HEAD"])
+        .output()
+        .map_err(|error| format!("Could not run git: {error}"))?;
+
+    if output.status.success() {
+        return Ok((true, String::from_utf8_lossy(&output.stdout).to_string()));
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).to_lowercase();
+    if stderr.contains("not a git repository") {
+        Ok((false, String::new()))
+    } else if stderr.contains("ambiguous argument")
+        || stderr.contains("unknown revision")
+        || stderr.contains("bad revision")
+    {
+        Ok((true, String::new()))
+    } else {
+        Err(format!(
+            "git diff failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
+}
+
 pub fn create_pr(root: &Path, title: &str, body: &str) -> Result<String, String> {
     let output = std::process::Command::new("gh")
         .current_dir(root)
