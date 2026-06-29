@@ -168,7 +168,11 @@
     },
     {
       "id": "FS-042",
-      "title": "Session tree foundation",
+      "title": "Session tree foundation"
+    },
+    {
+      "id": "FS-043",
+      "title": "Session replay",
       "planned": true
     }
   ]
