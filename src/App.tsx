@@ -563,6 +563,8 @@ function App() {
     setDraftPending(true);
     setDraftError(null);
     setSpecDraft(null);
+    setReqReview(null);
+    setReqReviewError(null);
     try {
       const result = await invoke<{ request: string; draft: string }>(
         "draft_spec",
@@ -575,6 +577,37 @@ function App() {
       );
     } finally {
       setDraftPending(false);
+    }
+  }
+
+  const [reqReview, setReqReview] = useState<string | null>(null);
+  const [reqReviewPending, setReqReviewPending] = useState(false);
+  const [reqReviewError, setReqReviewError] = useState<string | null>(null);
+
+  async function reviewRequirements() {
+    if (!specDraft) {
+      return;
+    }
+    setReqReviewPending(true);
+    setReqReviewError(null);
+    setReqReview(null);
+    try {
+      const result = await invoke<{ empty: boolean; review: string }>(
+        "review_requirements",
+        { spec: specDraft },
+      );
+      setReqReview(
+        result.empty ? "No requirements to review." : result.review,
+      );
+      recordEvent("command", "review", "reviewed requirements");
+    } catch (error) {
+      setReqReviewError(
+        error instanceof Error
+          ? error.message
+          : "Could not review the requirements.",
+      );
+    } finally {
+      setReqReviewPending(false);
     }
   }
   const requestCounter = useRef(0);
@@ -1944,6 +1977,26 @@ function App() {
                       Save spec
                     </button>
                   </div>
+                  <button
+                    type="button"
+                    className="doc-reader__close"
+                    onClick={reviewRequirements}
+                    disabled={reqReviewPending}
+                  >
+                    {reqReviewPending
+                      ? "Reviewing…"
+                      : "Review requirements"}
+                  </button>
+                  {reqReviewError ? (
+                    <div className="doc-error" role="status">
+                      <strong>Review unavailable</strong>
+                      <span>{reqReviewError}</span>
+                    </div>
+                  ) : reqReview ? (
+                    <pre className="doc-reader" aria-label="Requirements review">
+                      {reqReview}
+                    </pre>
+                  ) : null}
                 </>
               ) : null}
             </div>
