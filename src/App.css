@@ -964,6 +964,10 @@ input {
 .doc-workspace__notice {
   margin: 8px 0 0;
   color: var(--ink-faint);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 40vh;
+  overflow: auto;
 }
 
 .doc-workspace__pr {

@@ -3,6 +3,7 @@ mod autonomy;
 mod classify;
 mod command_dock;
 mod events;
+mod exec;
 mod git;
 mod provider;
 mod roles;
@@ -12,8 +13,8 @@ mod workspace;
 
 use approvals::{
     request_commit, request_create_branch, request_create_pr, request_push,
-    request_save_amendment, request_save_spec, request_switch_branch, resolve_approval,
-    ApprovalState,
+    request_run_command, request_save_amendment, request_save_spec, request_switch_branch,
+    resolve_approval, ApprovalState,
 };
 use autonomy::{get_autonomy_mode, set_autonomy_mode, AutonomyState};
 use classify::classify_request;
@@ -70,6 +71,7 @@ pub fn run() {
             request_create_pr,
             request_save_spec,
             request_save_amendment,
+            request_run_command,
             resolve_approval,
             classify_request,
             draft_spec,

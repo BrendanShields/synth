@@ -52,6 +52,7 @@ pub enum RouteTarget {
     SpecDetail,
     Answer,
     Classification,
+    Command,
     RuntimeStatus,
     EventStream,
     Phase,
@@ -138,12 +139,7 @@ pub fn route_raw_command(input: &str) -> CommandRoute {
             RouteTarget::None,
             "Empty input recognized; no route was evaluated.",
         ),
-        CommandKind::Shell => route(
-            parsed,
-            RouteDisposition::Blocked,
-            RouteTarget::None,
-            "Shell route blocked; command execution requires approval and is not yet available.",
-        ),
+        CommandKind::Shell => route_shell(parsed),
         CommandKind::Navigate => route_navigation(parsed),
         CommandKind::Ask => route_ask(parsed),
         CommandKind::Reference => unsupported_route(
@@ -231,6 +227,24 @@ fn route_spec_detail(parsed: ParsedCommand, raw_spec_id: &str) -> CommandRoute {
             "Requested static spec detail is not available; that spec id is unknown.",
         ),
     }
+}
+
+fn route_shell(parsed: ParsedCommand) -> CommandRoute {
+    if parsed.argument.trim().is_empty() {
+        return route(
+            parsed,
+            RouteDisposition::Blocked,
+            RouteTarget::None,
+            "Empty shell command; nothing to run.",
+        );
+    }
+
+    route(
+        parsed,
+        RouteDisposition::Handled,
+        RouteTarget::Command,
+        "Handled shell command; approval is required to run it.",
+    )
 }
 
 fn route_ask(parsed: ParsedCommand) -> CommandRoute {
@@ -486,15 +500,23 @@ mod tests {
     }
 
     #[test]
-    fn blocks_shell_routes_without_execution() {
+    fn routes_non_empty_shell_to_the_command_target_requiring_approval() {
         let route = route_raw_command("! cargo test");
 
         assert_eq!(route.parsed.kind, CommandKind::Shell);
         assert!(route.parsed.requires_approval);
+        assert_eq!(route.parsed.argument, "cargo test");
+        assert_eq!(route.disposition, RouteDisposition::Handled);
+        assert_eq!(route.target, RouteTarget::Command);
+        assert!(route.message.contains("approval"));
+    }
+
+    #[test]
+    fn blocks_empty_shell_commands() {
+        let route = route_raw_command("   !   ");
+        assert_eq!(route.parsed.kind, CommandKind::Shell);
         assert_eq!(route.disposition, RouteDisposition::Blocked);
         assert_eq!(route.target, RouteTarget::None);
-        assert!(route.message.contains("requires approval"));
-        assert!(route.message.contains("not yet available"));
     }
 
     #[test]

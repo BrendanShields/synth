@@ -47,6 +47,7 @@ enum PendingAction {
         amendment_id: String,
         content: String,
     },
+    RunCommand(String),
 }
 
 #[derive(Default)]
@@ -224,6 +225,20 @@ impl ApprovalInner {
             action: "save-amendment".to_string(),
             summary: format!("Save amendment {amendment_id} for {spec_id}"),
             command: format!("write {path}"),
+        }
+    }
+
+    fn record_run_command(&mut self, command: &str) -> ApprovalRequest {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.pending
+            .insert(id, PendingAction::RunCommand(command.to_string()));
+        ApprovalRequest {
+            id,
+            auto_approve: false,
+            action: "run-command".to_string(),
+            summary: format!("Run command: {command}"),
+            command: command.to_string(),
         }
     }
 
@@ -409,6 +424,40 @@ pub fn request_save_spec(
 }
 
 #[tauri::command]
+pub fn request_run_command(
+    approvals: tauri::State<'_, ApprovalState>,
+    workspace: tauri::State<'_, WorkspaceState>,
+    autonomy: tauri::State<'_, AutonomyState>,
+    command: String,
+) -> Result<ApprovalRequest, String> {
+    let command = command.trim();
+    if command.is_empty() || command.len() > 2000 {
+        return Err("Invalid command.".to_string());
+    }
+    if workspace
+        .0
+        .lock()
+        .expect("workspace state lock poisoned")
+        .is_none()
+    {
+        return Err("No workspace is open.".to_string());
+    }
+
+    let mode = autonomy
+        .0
+        .lock()
+        .expect("autonomy state lock poisoned")
+        .clone();
+    let mut request = approvals
+        .0
+        .lock()
+        .expect("approval state lock poisoned")
+        .record_run_command(command);
+    request.auto_approve = auto_approves(&request.action, &mode);
+    Ok(request)
+}
+
+#[tauri::command]
 pub fn request_save_amendment(
     approvals: tauri::State<'_, ApprovalState>,
     workspace: tauri::State<'_, WorkspaceState>,
@@ -581,6 +630,14 @@ pub fn resolve_approval(
                 message: format!("Saved {path}."),
             })
         }
+        PendingAction::RunCommand(command) => {
+            let output = crate::exec::run_command(Path::new(&root), &command, 30, 8000)?;
+            Ok(ApprovalOutcome {
+                id,
+                approved: true,
+                message: output,
+            })
+        }
     }
 }
 
@@ -594,9 +651,23 @@ mod tests {
             assert!(auto_approves(action, "high_autonomy"), "{action} should auto-approve");
             assert!(!auto_approves(action, "supervised"), "{action} must prompt when supervised");
         }
-        for action in ["push", "create-pr", "save-amendment"] {
+        for action in ["push", "create-pr", "save-amendment", "run-command"] {
             assert!(!auto_approves(action, "high_autonomy"), "{action} must never auto-approve");
         }
+    }
+
+    #[test]
+    fn records_run_command_with_exact_command_and_never_auto_approves() {
+        let mut inner = ApprovalInner::default();
+        let request = inner.record_run_command("cargo test");
+
+        assert_eq!(request.action, "run-command");
+        assert_eq!(request.command, "cargo test");
+        assert!(!request.auto_approve);
+        assert_eq!(
+            inner.take(request.id),
+            Some(PendingAction::RunCommand("cargo test".to_string()))
+        );
     }
 
     #[test]
