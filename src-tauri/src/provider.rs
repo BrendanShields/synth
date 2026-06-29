@@ -56,6 +56,14 @@ pub struct DiffReview {
 }
 
 const MAX_REVIEW_DIFF_CHARS: usize = 12_000;
+const MAX_REQUIREMENTS_REVIEW_CHARS: usize = 16_000;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequirementsReview {
+    pub empty: bool,
+    pub review: String,
+}
 
 pub fn truncate_diff(diff: &str, cap: usize) -> String {
     diff.chars().take(cap).collect()
@@ -67,6 +75,18 @@ pub fn build_review_prompt(diff: &str) -> String {
          omissions. Be concise and list concrete findings; if it looks fine, say so.\n\n\
          ```diff\n{diff}\n```\n\n\
          Review:"
+    )
+}
+
+pub fn build_requirements_review_prompt(spec: &str) -> String {
+    format!(
+        "You are a requirements critic reviewing a draft feature spec before any code \
+         is written. Find concrete problems with the requirements: ambiguity, \
+         untestable acceptance criteria, missing requirements or edge cases, and hidden \
+         scope. Be concise and list concrete findings; if the requirements look sound, \
+         say so plainly.\n\n\
+         ```markdown\n{spec}\n```\n\n\
+         Findings:"
     )
 }
 
@@ -165,6 +185,41 @@ pub async fn review_diff(
     .await?;
 
     Ok(DiffReview {
+        empty: false,
+        review,
+    })
+}
+
+#[tauri::command]
+pub async fn review_requirements(
+    provider: tauri::State<'_, ProviderState>,
+    roles: tauri::State<'_, crate::roles::ModelRolesState>,
+    spec: String,
+) -> Result<RequirementsReview, String> {
+    let trimmed = spec.trim();
+    if trimmed.is_empty() {
+        return Ok(RequirementsReview {
+            empty: true,
+            review: String::new(),
+        });
+    }
+
+    let mut config = current_config(&provider);
+    let overrides = roles
+        .0
+        .lock()
+        .expect("roles state lock poisoned")
+        .clone();
+    config.model =
+        crate::roles::resolve_model_for_role("requirements_critic", &overrides, &config.model);
+
+    let review = generate(
+        &config,
+        &build_requirements_review_prompt(&truncate_diff(trimmed, MAX_REQUIREMENTS_REVIEW_CHARS)),
+    )
+    .await?;
+
+    Ok(RequirementsReview {
         empty: false,
         review,
     })
@@ -885,6 +940,50 @@ mod tests {
         assert!(prompt.contains("- old"));
         assert!(prompt.contains("+ new"));
         assert!(prompt.to_lowercase().contains("review"));
+    }
+
+    #[test]
+    fn requirements_review_prompt_includes_spec_and_critic_instruction() {
+        let prompt = build_requirements_review_prompt("## 2. Requirements\n- R1. do thing");
+        assert!(prompt.contains("## 2. Requirements"));
+        assert!(prompt.contains("R1. do thing"));
+        let lower = prompt.to_lowercase();
+        assert!(lower.contains("requirements critic"));
+        assert!(lower.contains("untestable"));
+    }
+
+    #[test]
+    fn requirements_review_prompt_is_bounded_by_the_cap() {
+        let huge = "x".repeat(MAX_REQUIREMENTS_REVIEW_CHARS + 5_000);
+        let truncated = truncate_diff(&huge, MAX_REQUIREMENTS_REVIEW_CHARS);
+        assert_eq!(truncated.chars().count(), MAX_REQUIREMENTS_REVIEW_CHARS);
+        let prompt = build_requirements_review_prompt(&truncated);
+        assert!(prompt.to_lowercase().contains("requirements critic"));
+    }
+
+    #[test]
+    fn requirements_review_resolves_the_requirements_critic_role() {
+        let mut overrides = std::collections::HashMap::new();
+        assert_eq!(
+            crate::roles::resolve_model_for_role("requirements_critic", &overrides, "gemma4:e4b"),
+            "gemma4:e4b"
+        );
+        overrides.insert("requirements_critic".to_string(), "llama3:8b".to_string());
+        assert_eq!(
+            crate::roles::resolve_model_for_role("requirements_critic", &overrides, "gemma4:e4b"),
+            "llama3:8b"
+        );
+    }
+
+    #[test]
+    fn serializes_requirements_review_in_camel_case() {
+        let serialized = serde_json::to_value(RequirementsReview {
+            empty: false,
+            review: "finding".to_string(),
+        })
+        .unwrap();
+        assert_eq!(serialized["empty"], false);
+        assert_eq!(serialized["review"], "finding");
     }
 
     #[test]

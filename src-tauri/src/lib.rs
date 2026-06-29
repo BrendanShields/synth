@@ -33,7 +33,8 @@ use git::{git_diff, git_log, git_status};
 use knowledge::{detect_knowledge_drift, knowledge_links, retrieve_knowledge};
 use provider::{
     ask_model, ask_spec, ask_stream, ask_with_context, draft_spec, get_provider_config,
-    get_provider_status, review_diff, run_subagent, set_provider_config, ProviderState,
+    get_provider_status, review_diff, review_requirements, run_subagent, set_provider_config,
+    ProviderState,
 };
 use roles::{get_model_roles, set_model_role, ModelRolesState};
 use runtime_status::{announce_runtime_status, app_identity, get_runtime_status};
@@ -92,6 +93,7 @@ pub fn run() {
             classify_request,
             draft_spec,
             review_diff,
+            review_requirements,
             get_autonomy_mode,
             set_autonomy_mode,
             get_provider_config,
